@@ -32,10 +32,17 @@ resource "aws_lambda_function" "stathunter_lambda" {
   role          = aws_iam_role.stathunter_lambda_role.arn
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.stathunter_lambda.repository_url}:latest"
+
+  environment {
+    variables = {
+      PYBASEBALL_CACHE = "/tmp"
+      MPLCONFIGDIR     = "/tmp"
+    }
+  }
 }
 
 resource "aws_lambda_function_url" "stathunter_lambda_url" {
-  function_name = aws_lambda_function.stathunter_lambda.function_name
+  function_name      = aws_lambda_function.stathunter_lambda.function_name
   authorization_type = "NONE"
 }
 

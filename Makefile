@@ -20,4 +20,4 @@ push:
 	docker push $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(REPO_NAME):latest
 
 lambda:
-	aws lambda update-function-code --function-name $(FUNCTION_NAME) --image-uri $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(REPO_NAME):latest > /dev/null 2>&1
+	aws lambda update-function-code --function-name $(FUNCTION_NAME) --image-uri $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com/$(REPO_NAME):latest --no-cli-pager
