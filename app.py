@@ -1,6 +1,7 @@
 from helpers import get_games, get_lineups, get_mlb_batter_stats, get_mlb_pitcher_stats, get_team_abbreviation
 import boto3
 from datetime import date
+import datetime
 
 
 def lambda_handler(event, context):
@@ -63,5 +64,6 @@ def lambda_handler(event, context):
                 "date": date.today().strftime("%Y-%m-%d"),
                 "page": "batter-hits",
                 "data": results,
+                "expireAt": int((datetime.datetime.now() + datetime.timedelta(days=7)).timestamp()),
             }
         )
