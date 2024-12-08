@@ -1,6 +1,8 @@
 # Use the official AWS Lambda Python base image
 FROM public.ecr.aws/lambda/python:3.9
 
+ENV PYBASEBALL_CACHE=/tmp
+
 # Copy function code
 COPY app.py ${LAMBDA_TASK_ROOT}
 COPY helpers.py ${LAMBDA_TASK_ROOT}

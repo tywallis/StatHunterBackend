@@ -1,6 +1,5 @@
 import pandas as pd
 import requests
-import statsapi
 import pybaseball
 
 TEAM_ABBREVIATIONS = {
