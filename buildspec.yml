@@ -23,5 +23,3 @@ phases:
       - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 864981721755.dkr.ecr.us-east-1.amazonaws.com
       - docker tag stat-hunter:$CODEBUILD_BUILD_NUMBER 864981721755.dkr.ecr.us-east-1.amazonaws.com/stat-hunter:$CODEBUILD_BUILD_NUMBER
       - docker push 864981721755.dkr.ecr.us-east-1.amazonaws.com/stat-hunter:$CODEBUILD_BUILD_NUMBER
-  finally:
-      - cat "$CODEBUILD_SRC_DIR/my_resource/rpdk.log"
