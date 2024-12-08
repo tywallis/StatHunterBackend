@@ -1,4 +1,4 @@
-from .helpers import get_games, get_lineups, get_mlb_batter_stats, get_mlb_pitcher_stats, get_team_abbreviation
+from helpers import get_games, get_lineups, get_mlb_batter_stats, get_mlb_pitcher_stats, get_team_abbreviation
 import boto3
 from datetime import date
 
@@ -29,9 +29,11 @@ def lambda_handler(event, context):
             for index, row in away_batters.iterrows():
                 batter_mlb_stats = get_mlb_batter_stats(row["Player ID"], "All")["stats"][0]["splits"][0]["stat"]
                 batter_l5 = ""  # get_batter_l5()
+                batter_name = row["Name"]
+                batter_hand = row["Hand"]
                 batter_stats_dynamo_row = {
                     "batter_team": get_team_abbreviation(away_team),
-                    "batter_name": f"{row["Name"]} ({row["Hand"]})",
+                    "batter_name": f"{batter_name} ({batter_hand})",
                     "batter_ba": batter_mlb_stats["avg"],
                     "pitcher_ba": home_pitcher_stats[row["Hand"]]["stats"][0]["splits"][0]["stat"]["avg"],
                     "pitcher_name": f"{home_pitcher['Name'].values[0]} ({home_pitcher['Hand'].values[0]})",
@@ -42,9 +44,11 @@ def lambda_handler(event, context):
             for index, row in home_batters.iterrows():
                 batter_mlb_stats = get_mlb_batter_stats(row["Player ID"], "All")["stats"][0]["splits"][0]["stat"]
                 batter_l5 = ""  # get_batter_l5()
+                batter_name = row["Name"]
+                batter_hand = row["Hand"]
                 batter_stats_dynamo_row = {
                     "batter_team": get_team_abbreviation(home_team),
-                    "batter_name": f"{row["Name"]} ({row["Hand"]})",
+                    "batter_name": f"{batter_name} ({batter_hand})",
                     "batter_ba": batter_mlb_stats["avg"],
                     "pitcher_ba": away_pitcher_stats[row["Hand"]]["stats"][0]["splits"][0]["stat"]["avg"],
                     "pitcher_name": f"{away_pitcher['Name'].values[0]} ({away_pitcher['Hand'].values[0]})",
@@ -61,6 +65,3 @@ def lambda_handler(event, context):
                 "data": results,
             }
         )
-
-
-lambda_handler(None, None)
