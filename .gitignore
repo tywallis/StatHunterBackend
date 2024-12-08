@@ -24,7 +24,8 @@
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -341,5 +342,11 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+.terraform.lock.hcl
 
 # End of https://www.toptal.com/developers/gitignore/api/osx,linux,python,windows,pycharm,visualstudiocode,sam
