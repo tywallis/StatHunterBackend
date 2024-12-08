@@ -9,13 +9,12 @@ phases:
       - python3 --version
       - pip3 install --upgrade pip
       - pip3 install --upgrade awscli
-      - docker info
+      - sudo docker info
   build:
     commands:
       - echo Build started on `date`
       - echo Building the Docker image...
       - ls
-      - cd app
       - docker build -t stat-hunter:$CODEBUILD_BUILD_NUMBER .
       - docker container ls
   post_build:
