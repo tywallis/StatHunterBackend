@@ -24,7 +24,7 @@ jobs:
           sam deploy \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --stack-name sam-hello-world \
+            --stack-name stat-hunter-backend \
             --s3-bucket tys-lambda-deployments \
             --capabilities CAPABILITY_IAM \
             --region us-east-1
