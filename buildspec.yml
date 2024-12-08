@@ -1,0 +1,25 @@
+phases:
+  install:
+    runtime-versions:
+       python: 3.12
+  pre_build:
+    commands:
+      - python3 --version
+      - pip3 install --upgrade pip
+      - pip3 install --upgrade awscli
+      - sudo docker info
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - ls
+      - cd app
+      - docker build -t stat-hunter:$CODEBUILD_BUILD_NUMBER .
+      - docker container ls
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker image...
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 864981721755.dkr.ecr.us-east-1.amazonaws.com
+      - docker tag stat-hunter:$CODEBUILD_BUILD_NUMBER 864981721755.dkr.ecr.us-east-1.amazonaws.com/stat-hunter:$CODEBUILD_BUILD_NUMBER
+      - docker push 864981721755.dkr.ecr.us-east-1.amazonaws.com/stat-hunter:$CODEBUILD_BUILD_NUMBER
