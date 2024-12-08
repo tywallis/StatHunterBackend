@@ -9,7 +9,7 @@ phases:
       - python3 --version
       - pip3 install --upgrade pip
       - pip3 install --upgrade awscli
-      - sudo docker info
+      - docker info
   build:
     commands:
       - echo Build started on `date`
