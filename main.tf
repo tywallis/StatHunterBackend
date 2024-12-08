@@ -27,13 +27,35 @@ resource "aws_iam_role_policy_attachment" "stathunter_lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_policy" "dynamodb_policy" {
+  name        = "stathunter-lambda-dynamodb-policy"
+  description = "Policy for Lambda to access all DynamoDB tables"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "dynamodb:*"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "stathunter_lambda_dynamodb_policy" {
+  role       = aws_iam_role.stathunter_lambda_role.name
+  policy_arn = aws_iam_policy.dynamodb_policy.arn
+}
+
 resource "aws_lambda_function" "stathunter_lambda" {
   function_name = "stathunter_lambda_function"
   role          = aws_iam_role.stathunter_lambda_role.arn
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.stathunter_lambda.repository_url}:latest"
-  timeout       = 900  # 15 minutes
-  memory_size   = 2048  # 2 GB
+  timeout       = 300  # 5 minutes
+  memory_size   = 1024  # 1 GB
 
   environment {
     variables = {
