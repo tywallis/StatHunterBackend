@@ -1,4 +1,4 @@
-from helpers import get_games, get_lineups, get_mlb_batter_stats, get_mlb_pitcher_stats, get_team_abbreviation
+from .helpers import get_games, get_lineups, get_mlb_batter_stats, get_mlb_pitcher_stats, get_team_abbreviation
 import boto3
 from datetime import date
 
