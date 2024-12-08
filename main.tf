@@ -33,6 +33,7 @@ resource "aws_lambda_function" "stathunter_lambda" {
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.stathunter_lambda.repository_url}:latest"
   timeout       = 900  # 15 minutes
+  memory_size   = 2048  # 2 GB
 
   environment {
     variables = {
