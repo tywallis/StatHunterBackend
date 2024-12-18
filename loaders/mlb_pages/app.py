@@ -5,6 +5,22 @@ from datetime import date
 import datetime
 
 
+def process_batters(batters, pitcher_stats, team, pitcher, results):
+    for index, row in batters.iterrows():
+        batter_mlb_stats = get_mlb_batter_stats(row["Player ID"], "All")["stats"][0]["splits"][0]["stat"]
+        batter_l5 = get_batter_history(row["Player ID"])
+        batter_name = row["Name"]
+        batter_hand = row["Hand"]
+        batter_stats_dynamo_row = {
+            "batter_team": get_team_abbreviation(team),
+            "batter_name": f"{batter_name} ({batter_hand})",
+            "batter_ba": batter_mlb_stats["avg"],
+            "pitcher_ba": pitcher_stats[row["Hand"]]["stats"][0]["splits"][0]["stat"]["avg"],
+            "pitcher_name": f"{pitcher['Name'].values[0]} ({pitcher['Hand'].values[0]})",
+            "L5": batter_l5,
+        }
+        results.append(batter_stats_dynamo_row)
+
 def load_mlb_page_data():
     games_to_analyze = get_games()
 
@@ -28,35 +44,8 @@ def load_mlb_page_data():
             home_batters = df.loc[(df["Team"] == get_team_abbreviation(home_team)) & (df["Position"] != "P")]
             home_pitcher_stats = get_mlb_pitcher_stats(home_pitcher["Player ID"].values[0], "All")
 
-            for index, row in away_batters.iterrows():
-                batter_mlb_stats = get_mlb_batter_stats(row["Player ID"], "All")["stats"][0]["splits"][0]["stat"]
-                batter_l5 = get_batter_history(row["Player ID"])
-                batter_name = row["Name"]
-                batter_hand = row["Hand"]
-                batter_stats_dynamo_row = {
-                    "batter_team": get_team_abbreviation(away_team),
-                    "batter_name": f"{batter_name} ({batter_hand})",
-                    "batter_ba": batter_mlb_stats["avg"],
-                    "pitcher_ba": home_pitcher_stats[row["Hand"]]["stats"][0]["splits"][0]["stat"]["avg"],
-                    "pitcher_name": f"{home_pitcher['Name'].values[0]} ({home_pitcher['Hand'].values[0]})",
-                    "L5": batter_l5,
-                }
-                results.append(batter_stats_dynamo_row)
-
-            for index, row in home_batters.iterrows():
-                batter_mlb_stats = get_mlb_batter_stats(row["Player ID"], "All")["stats"][0]["splits"][0]["stat"]
-                batter_l5 = get_batter_history(row["Player ID"])
-                batter_name = row["Name"]
-                batter_hand = row["Hand"]
-                batter_stats_dynamo_row = {
-                    "batter_team": get_team_abbreviation(home_team),
-                    "batter_name": f"{batter_name} ({batter_hand})",
-                    "batter_ba": batter_mlb_stats["avg"],
-                    "pitcher_ba": away_pitcher_stats[row["Hand"]]["stats"][0]["splits"][0]["stat"]["avg"],
-                    "pitcher_name": f"{away_pitcher['Name'].values[0]} ({away_pitcher['Hand'].values[0]})",
-                    "L5": batter_l5,
-                }
-                results.append(batter_stats_dynamo_row)
+            process_batters(away_batters, home_pitcher_stats, away_team, home_pitcher, results)
+            process_batters(home_batters, away_pitcher_stats, home_team, away_pitcher, results)
 
         dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table("mlb-page-data")
@@ -65,6 +54,5 @@ def load_mlb_page_data():
                 "date": date.today().strftime("%Y-%m-%d"),
                 "page": "batter-hits",
                 "data": results,
-                "expireAt": int((datetime.datetime.now() + datetime.timedelta(days=7)).timestamp()),
             }
         )
