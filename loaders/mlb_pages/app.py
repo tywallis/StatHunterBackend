@@ -1,5 +1,5 @@
 from loaders.common.utils import get_games, get_lineups, get_team_abbreviation
-from loaders.mlb_pages.helpers import get_mlb_batter_stats, get_mlb_pitcher_stats
+from loaders.mlb_pages.helpers import get_batter_history, get_mlb_batter_stats, get_mlb_pitcher_stats
 import boto3
 from datetime import date
 import datetime
@@ -30,7 +30,7 @@ def load_mlb_page_data():
 
             for index, row in away_batters.iterrows():
                 batter_mlb_stats = get_mlb_batter_stats(row["Player ID"], "All")["stats"][0]["splits"][0]["stat"]
-                batter_l5 = ""  # get_batter_l5()
+                batter_l5 = get_batter_history()
                 batter_name = row["Name"]
                 batter_hand = row["Hand"]
                 batter_stats_dynamo_row = {
