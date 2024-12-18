@@ -1,4 +1,5 @@
-from loaders.mlb_pages.helpers import get_games, get_lineups, get_mlb_batter_stats, get_mlb_pitcher_stats, get_team_abbreviation
+from loaders.common.utils import get_games, get_lineups, get_team_abbreviation
+from loaders.mlb_pages.helpers import get_mlb_batter_stats, get_mlb_pitcher_stats
 import boto3
 from datetime import date
 import datetime
