@@ -8,7 +8,7 @@ import datetime
 def process_batters(batters, vs_pitcher_stats, team, vs_pitcher, results):
     for index, row in batters.iterrows():
         batter_mlb_stats = get_mlb_batter_stats(row["Player ID"], "All")["stats"][0]["splits"][0]["stat"]
-        batter_l5 = get_batter_history(int(row["Player ID"]))
+        batter_l5 = get_batter_history(row["Player ID"])
         batter_name = row["Name"]
         batter_hand = row["Hand"]
         batter_stats_dynamo_row = {
