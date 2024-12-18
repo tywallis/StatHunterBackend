@@ -5,7 +5,7 @@ from datetime import date
 import datetime
 
 
-def load_dynamo():
+def load_mlb_page_data():
     games_to_analyze = get_games()
 
     if len(games_to_analyze) > 0:
