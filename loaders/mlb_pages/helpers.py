@@ -2,7 +2,7 @@ import boto3
 import requests
 
 dynamo = boto3.resource("dynamodb")
-table = dynamo.Table("mlb-page-data")
+player_data_table = dynamo.Table("custom-player-data")
 
 def get_mlb_batter_stats(player_id, vs_hand=None):
     if vs_hand == "L":
@@ -28,7 +28,7 @@ def get_mlb_pitcher_stats(player_id, vs_hand=None):
         return requests.get(f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats?group=pitching&season=2024&stats=season").json()
 
 def get_batter_history(batter_id, num_games: int = 5, key: str = "hits"):
-    player_data = table.get_item(Key={"player_id": batter_id})
+    player_data = player_data_table.get_item(Key={"player_id": batter_id})
     if "Item" not in player_data:
         return [0] * num_games
     past_games = player_data["Item"]["past_games"]
