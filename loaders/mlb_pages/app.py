@@ -5,7 +5,7 @@ from datetime import date
 import datetime
 
 
-def process_batters(batters, pitcher_stats, team, pitcher, results):
+def process_batters(batters, vs_pitcher_stats, team, vs_pitcher, results):
     for index, row in batters.iterrows():
         batter_mlb_stats = get_mlb_batter_stats(row["Player ID"], "All")["stats"][0]["splits"][0]["stat"]
         batter_l5 = get_batter_history(row["Player ID"])
@@ -15,8 +15,8 @@ def process_batters(batters, pitcher_stats, team, pitcher, results):
             "batter_team": get_team_abbreviation(team),
             "batter_name": f"{batter_name} ({batter_hand})",
             "batter_ba": batter_mlb_stats["avg"],
-            "pitcher_ba": pitcher_stats[row["Hand"]]["stats"][0]["splits"][0]["stat"]["avg"],
-            "pitcher_name": f"{pitcher['Name'].values[0]} ({pitcher['Hand'].values[0]})",
+            "pitcher_ba": vs_pitcher_stats[row["Hand"]]["stats"][0]["splits"][0]["stat"]["avg"],
+            "pitcher_name": f"{vs_pitcher['Name'].values[0]} ({vs_pitcher['Hand'].values[0]})",
             "L5": batter_l5,
         }
         results.append(batter_stats_dynamo_row)
