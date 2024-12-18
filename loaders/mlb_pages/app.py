@@ -2,7 +2,6 @@ from loaders.common.utils import get_games, get_lineups, get_team_abbreviation
 from loaders.mlb_pages.helpers import get_batter_history, get_mlb_batter_stats, get_mlb_pitcher_stats
 import boto3
 from datetime import date
-import datetime
 
 
 def process_batters(batters, vs_pitcher_stats, team, vs_pitcher, results):

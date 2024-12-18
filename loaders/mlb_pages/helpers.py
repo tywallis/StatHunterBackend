@@ -34,4 +34,4 @@ def get_batter_history(batter_id, num_games: int = 5, key: str = "hits"):
     past_games = player_data["Item"]["past_games"]
     l5_games = past_games[-5:]
 
-    return [game[key] for game in l5_games]
+    return [int(game["stats"][key]) for game in l5_games]
