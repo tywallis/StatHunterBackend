@@ -29,6 +29,8 @@ def get_mlb_pitcher_stats(player_id, vs_hand=None):
 
 def get_batter_history(batter_id, num_games: int = 5, key: str = "hits"):
     player_data = table.get_item(Key={"player_id": batter_id})
+    if "Item" not in player_data:
+        return [0] * num_games
     past_games = player_data["Item"]["past_games"]
     l5_games = past_games[-5:]
 
