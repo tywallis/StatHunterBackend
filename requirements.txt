@@ -1,4 +1,5 @@
 pandas
 MLB-StatsAPI
 boto3
-pybaseball
+# pybaseball
+tabulate

@@ -1,4 +1,5 @@
 from datetime import date
+import json
 import boto3
 import statsapi
 
@@ -37,13 +38,11 @@ def save_player_data(player_stats: dict, game_pk: int, game_date: date):
     if player_game_stats := player_stats["stats"][player_position]:
         dynamo_data = table.get_item(Key={"player_id": player_stats["person"]["id"]})
         if "Item" not in dynamo_data:
-            item = (
-                {
-                    "player_id": player_stats["person"]["id"],
-                    "name": player_stats["person"]["fullName"],
-                    "past_games": [],
-                },
-            )
+            item = {
+                "player_id": player_stats["person"]["id"],
+                "name": player_stats["person"]["fullName"],
+                "past_games": [],
+            }
         else:
             item = dynamo_data["Item"]
 
@@ -66,10 +65,10 @@ def load_daily_player_stats(given_date: date = date.today()):
         # play_by_play = get_play_by_play(game_pk)
         boxscore = get_boxscore(game_pk)
 
-        for player_key in boxscore["home"]["players"].keys():
-            player_stats = boxscore["home"]["players"][player_key]
+        for player_key in boxscore["liveData"]["boxscore"]["teams"]["home"]["players"].keys():
+            player_stats = boxscore["liveData"]["boxscore"]["teams"]["home"]["players"][player_key]
             save_player_data(player_stats, game_pk, given_date)
 
-        for player_key in boxscore["away"]["players"].keys():
-            player_stats = boxscore["away"]["players"][player_key]
+        for player_key in boxscore["liveData"]["boxscore"]["teams"]["away"]["players"].keys():
+            player_stats = boxscore["liveData"]["boxscore"]["teams"]["away"]["players"][player_key]
             save_player_data(player_stats, game_pk, given_date)

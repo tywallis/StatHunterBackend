@@ -1,5 +1,9 @@
+from datetime import date
+import re
+from bs4 import BeautifulSoup
 import pandas as pd
-import pybaseball
+import requests
+import statsapi
 
 TEAM_ABBREVIATIONS = {
     "Arizona Diamondbacks": "ARI",
@@ -21,7 +25,7 @@ TEAM_ABBREVIATIONS = {
     "Minnesota Twins": "MIN",
     "New York Mets": "NYM",
     "New York Yankees": "NYY",
-    "Oakland Athletics": "OAK",
+    "Athletics": "ATH",
     "Philadelphia Phillies": "PHI",
     "Pittsburgh Pirates": "PIT",
     "San Diego Padres": "SD",
@@ -38,113 +42,114 @@ TEAM_ABBREVIATIONS = {
 def get_team_abbreviation(team_name):
     return TEAM_ABBREVIATIONS[team_name]
 
-
 def get_player_id(player_name: str) -> int | None:
-    matches = pybaseball.playerid_lookup(player_name.split(" ")[1], player_name.split(" ")[0])
-
-    if len(matches) == 0:
-        raise ValueError(f"No players found for {player_name}: {matches}")
-
-    return matches["key_mlbam"].values[0]
+    url_string = player_name.replace(" ", "%20")
+    response = requests.get(f"https://statsapi.mlb.com/api/v1/people/search?names={url_string}").json()
+    return response["people"][0]["id"] if response["people"] else None
 
 
-def get_lineups():    
-    mock_data = [
-        {"Name": "Reese Olson", "Position": "P", "Hand": "R", "Team": "DET"},
-        {"Name": "Parker Meadows", "Position": "CF", "Hand": "L", "Team": "DET"},
-        {"Name": "Gio Urshela", "Position": "3B", "Hand": "R", "Team": "DET"},
-        {"Name": "Riley Greene", "Position": "LF", "Hand": "L", "Team": "DET"},
-        {"Name": "Spencer Torkelson", "Position": "1B", "Hand": "R", "Team": "DET"},
-        {"Name": "Kerry Carpenter", "Position": "DH", "Hand": "L", "Team": "DET"},
-        {"Name": "Mark Canha", "Position": "DH", "Hand": "R", "Team": "DET"},
-        {"Name": "Colt Keith", "Position": "2B", "Hand": "L", "Team": "DET"},
-        {"Name": "Matt Vierling", "Position": "RF", "Hand": "R", "Team": "DET"},
-        {"Name": "Javier Báez", "Position": "SS", "Hand": "R", "Team": "DET"},
-        {"Name": "Zach McKinstry", "Position": "3B", "Hand": "L", "Team": "DET"},
-        {"Name": "Wenceel Pérez", "Position": "CF", "Hand": "S", "Team": "DET"},
-        {"Name": "Jake Rogers", "Position": "C", "Hand": "R", "Team": "DET"},
-        {"Name": "Oneil Cruz", "Position": "SS", "Hand": "L", "Team": "PIT"},
-        {"Name": "Bryan Reynolds", "Position": "RF", "Hand": "S", "Team": "PIT"},
-        {"Name": "Ke'Bryan Hayes", "Position": "3B", "Hand": "R", "Team": "PIT"},
-        {"Name": "Jack Suwinski", "Position": "LF", "Hand": "L", "Team": "PIT"},
-        {"Name": "Andrew McCutchen", "Position": "DH", "Hand": "R", "Team": "PIT"},
-        {"Name": "Rowdy Tellez", "Position": "1B", "Hand": "L", "Team": "PIT"},
-        {"Name": "Connor Joe", "Position": "RF", "Hand": "R", "Team": "PIT"},
-        {"Name": "Michael Taylor", "Position": "CF", "Hand": "R", "Team": "PIT"},
-        {"Name": "Jared Triolo", "Position": "2B", "Hand": "R", "Team": "PIT"},
-        {"Name": "Joey Bart", "Position": "C", "Hand": "R", "Team": "PIT"},
-        {"Name": "Ryder Ryan", "Position": "P", "Hand": "R", "Team": "PIT"},
-    ]
+def get_players(home_away_dict):
+    rows = []
+    for home_away, v in home_away_dict.items():
+        players = v["players"]
+        # print("\n{} - {}".format(v["team"], v["lineupStatus"]))
+        for idx, player in enumerate(players):
+            if home_away == "Home":
+                team = home_away_dict["Home"]["team"]
+                opp = home_away_dict["Away"]["team"]
+            else:
+                team = home_away_dict["Away"]["team"]
+                opp = home_away_dict["Home"]["team"]
+            if player.find("span", {"class": "lineup__throws"}):
+                playerPosition = "P"
+                handedness = player.find("span", {"class": "lineup__throws"}).text
+            else:
+                playerPosition = player.find("div", {"class": "lineup__pos"}).text
+                handedness = player.find("span", {"class": "lineup__bats"}).text
 
-    df = pd.DataFrame(mock_data)
+            a_tag = player.find("a")
+            title = a_tag.get("title")
+            if title:
+                playerName = title.strip()
+            else:
+                playerName = a_tag.text.strip()
+            
+            if playerPosition == "P" and '.' in playerName:
+                href = a_tag.get("href")
+                # e.g. "/baseball/player/john-doe-12345"
+                playerNameId = href.split("/")[-1]
+                # split playerNameId by "-" and take the first 2 elements
+                playerNameId = playerNameId.split("-")[:2]
+                # join the elements with a space and capitalize the first letter of each word
+                playerName = " ".join([word.capitalize() for word in playerNameId])
+
+            playerRow = {
+                "Bat Order": idx,
+                "Name": playerName,
+                "Position": playerPosition,
+                "Team": team,
+                "Opponent": opp,
+                "Home/Away": home_away,
+                "Handedness": handedness,
+                "Lineup Status": home_away_dict[home_away]["lineupStatus"],
+            }
+
+            rows.append(playerRow)
+            # print("{} {}".format(playerRow["Position"], playerRow["Name"]))
+
+    return rows
+
+def get_lineups(game_day: str = "today"):
+    ERRORS = 0
+    rows = []
+    url = f"https://www.rotowire.com/baseball/daily-lineups.php?date={game_day}"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, "html.parser")
+    lineupBoxes = soup.find_all("div", {"class": "lineup__box"})
+
+    for lineupBox in lineupBoxes:
+        try:
+            awayTeam = lineupBox.find("div", {"class": "lineup__team is-visit"}).text.strip()
+            homeTeam = lineupBox.find("div", {"class": "lineup__team is-home"}).text.strip()
+
+            # print(f"\n\n############\n  {awayTeam} @ {homeTeam}\n############")
+
+            awayLineup = lineupBox.find("ul", {"lineup__list is-visit"})
+            homeLineup = lineupBox.find("ul", {"lineup__list is-home"})
+
+            awayLineupStatus = awayLineup.find("li", {"class": re.compile("lineup__status.*")}).text.strip()
+            homeLineupStatus = homeLineup.find("li", {"class": re.compile("lineup__status.*")}).text.strip()
+
+            awayPlayers = awayLineup.find_all("li", {"class": re.compile("lineup__player.*")})
+            homePlayers = homeLineup.find_all("li", {"class": re.compile("lineup__player.*")})
+
+            home_away_dict = {
+                "Home": {"team": homeTeam, "players": homePlayers, "lineupStatus": homeLineupStatus},
+                "Away": {"team": awayTeam, "players": awayPlayers, "lineupStatus": awayLineupStatus},
+            }
+
+            playerRows = get_players(home_away_dict)
+            rows += playerRows
+        except:
+            continue
+
+    df = pd.DataFrame(rows)
 
     # Add player IDs
     player_ids = []
     for index, row in df.iterrows():
         player_name = row["Name"]
         player_id = get_player_id(player_name)
-        player_ids.append(player_id)
+        player_ids.append(str(player_id))
     df["Player ID"] = player_ids
 
     return df
 
 
 def get_games():
-    mock_data = [
-        {
-            "gamePk": 745520,
-            "gameGuid": "d9c5c674-418e-40b4-aecb-94cdd81e1e96",
-            "link": "/api/v1.1/game/745520/feed/live",
-            "gameType": "R",
-            "season": "2024",
-            "gameDate": "2024-04-08T22:40:00Z",
-            "officialDate": "2024-04-08",
-            "status": {
-                "abstractGameState": "Final",
-                "codedGameState": "F",
-                "detailedState": "Final",
-                "statusCode": "F",
-                "startTimeTBD": False,
-                "abstractGameCode": "F",
-            },
-            "teams": {
-                "away": {
-                    "leagueRecord": {"wins": 6, "losses": 4, "pct": ".600"},
-                    "score": 4,
-                    "team": {"id": 116, "name": "Detroit Tigers", "link": "/api/v1/teams/116"},
-                    "isWinner": False,
-                    "splitSquad": False,
-                    "seriesNumber": 4,
-                },
-                "home": {
-                    "leagueRecord": {"wins": 9, "losses": 2, "pct": ".818"},
-                    "score": 7,
-                    "team": {"id": 134, "name": "Pittsburgh Pirates", "link": "/api/v1/teams/134"},
-                    "isWinner": True,
-                    "splitSquad": False,
-                    "seriesNumber": 4,
-                },
-            },
-            "venue": {"id": 31, "name": "PNC Park", "link": "/api/v1/venues/31"},
-            "content": {"link": "/api/v1/game/745520/content"},
-            "isTie": False,
-            "gameNumber": 1,
-            "publicFacing": True,
-            "doubleHeader": "N",
-            "gamedayType": "P",
-            "tiebreaker": "N",
-            "calendarEventID": "14-745520-2024-04-08",
-            "seasonDisplay": "2024",
-            "dayNight": "night",
-            "scheduledInnings": 9,
-            "reverseHomeAwayStatus": False,
-            "inningBreakLength": 120,
-            "gamesInSeries": 2,
-            "seriesGameNumber": 1,
-            "seriesDescription": "Regular Season",
-            "recordSource": "S",
-            "ifNecessary": "N",
-            "ifNecessaryDescription": "Normal Game",
-        }
-    ]
-    return mock_data
+    params = {
+        "sportId": 1,
+        "date": date.today().strftime("%Y-%m-%d"),
+    }
+    games = statsapi.get("schedule", params)["dates"][0]["games"]
+    return games
