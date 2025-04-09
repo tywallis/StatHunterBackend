@@ -3,3 +3,4 @@ MLB-StatsAPI
 boto3
 # pybaseball
 tabulate
+bs4
