@@ -62,7 +62,112 @@ def load_daily_player_stats(given_date: date = date.today()):
     print(f"Processing {len(games)} games for {given_date}")
     for game in games:
         game_pk = game["gamePk"]
-        # play_by_play = get_play_by_play(game_pk)
+        play_by_play = get_play_by_play(game_pk)
+
+        if not play_by_play or "allPlays" not in play_by_play:
+            print(f"No play-by-play data found for game {game_pk} on {given_date}")
+            continue
+        print(f"Processing game {game_pk} on {given_date}")
+
+        # Process each play, look for pitch events, and track how many pitches the pitcher threw of each type and zone
+        stat_tracking = {}
+        for play in play_by_play["allPlays"]:
+            batter_id = play.get("matchup", {}).get("batter", {}).get("id")
+            pitcher_id = play.get("matchup", {}).get("pitcher", {}).get("id")
+
+            play_events = play.get("playEvents", [])
+            for event in play_events:
+                if event["isPitch"]:
+                    pitch_data = event.get("pitchData", {})
+                    pitch_zone = str(pitch_data.get("zone", "unknown"))
+                    pitch_type = event.get("details", {}).get("type", {}).get("code", "unknown")
+                    pitcher_split_code = str(play.get("matchup", {}).get("splits", {}).get("pitcher", "unknown"))
+                    batter_split_code = str(play.get("matchup", {}).get("splits", {}).get("batter", "unknown"))
+
+                    # Skip if essential data is missing
+                    if pitch_zone == "unknown" or pitch_type == "unknown":
+                        continue
+
+                    if pitch_zone and pitch_type:
+                        # Update pitcher data - create new dict for each level to avoid circular references
+                        if pitcher_id not in stat_tracking:
+                            stat_tracking[pitcher_id] = {}
+                        if "pitching" not in stat_tracking[pitcher_id]:
+                            stat_tracking[pitcher_id]["pitching"] = {"total": 0}
+                        stat_tracking[pitcher_id]["pitching"]["total"] += 1
+
+                        if pitcher_split_code not in stat_tracking[pitcher_id]["pitching"]:
+                            stat_tracking[pitcher_id]["pitching"][pitcher_split_code] = {"total": 0}
+                        stat_tracking[pitcher_id]["pitching"][pitcher_split_code]["total"] += 1
+
+                        if pitch_type not in stat_tracking[pitcher_id]["pitching"][pitcher_split_code]:
+                            stat_tracking[pitcher_id]["pitching"][pitcher_split_code][pitch_type] = {"total": 0}
+                        stat_tracking[pitcher_id]["pitching"][pitcher_split_code][pitch_type]["total"] += 1
+
+                        if pitch_zone not in stat_tracking[pitcher_id]["pitching"][pitcher_split_code][pitch_type]:
+                            stat_tracking[pitcher_id]["pitching"][pitcher_split_code][pitch_type][pitch_zone] = {"total": 0}
+                        stat_tracking[pitcher_id]["pitching"][pitcher_split_code][pitch_type][pitch_zone]["total"] += 1
+
+                        # Update batter data - create new dict for each level to avoid circular references
+                        if "Foul" in event["details"]["description"]:
+                            stat_key = "fouls"
+                        elif "Strike" in event["details"]["description"]:
+                            stat_key = "strikes"
+                        elif event["details"]["isInPlay"] and not event["details"]["isOut"]:
+                            stat_key = "hits"
+                        elif event["details"]["isBall"]:
+                            stat_key = "balls"
+                        else:
+                            stat_key = "outs"
+
+                        default = {"total": 0, "fouls": 0, "strikes": 0, "hits": 0, "balls": 0, "outs": 0}
+
+                        if batter_id not in stat_tracking:
+                            stat_tracking[batter_id] = {}
+                        if "batting" not in stat_tracking[batter_id]:
+                            stat_tracking[batter_id]["batting"] = default.copy()
+                        stat_tracking[batter_id]["batting"]["total"] += 1
+                        stat_tracking[batter_id]["batting"][stat_key] += 1
+
+                        if batter_split_code not in stat_tracking[batter_id]["batting"]:
+                            stat_tracking[batter_id]["batting"][batter_split_code] = default.copy()
+                        stat_tracking[batter_id]["batting"][batter_split_code]["total"] += 1
+                        stat_tracking[batter_id]["batting"][batter_split_code][stat_key] += 1
+
+                        if pitch_type not in stat_tracking[batter_id]["batting"][batter_split_code]:
+                            stat_tracking[batter_id]["batting"][batter_split_code][pitch_type] = default.copy()
+                        stat_tracking[batter_id]["batting"][batter_split_code][pitch_type]["total"] += 1
+                        stat_tracking[batter_id]["batting"][batter_split_code][pitch_type][stat_key] += 1
+
+                        if pitch_zone not in stat_tracking[batter_id]["batting"][batter_split_code][pitch_type]:
+                            stat_tracking[batter_id]["batting"][batter_split_code][pitch_type][pitch_zone] = default.copy()
+                        stat_tracking[batter_id]["batting"][batter_split_code][pitch_type][pitch_zone]["total"] += 1
+                        stat_tracking[batter_id]["batting"][batter_split_code][pitch_type][pitch_zone][stat_key] += 1
+
+        # Save the pitch tracking data to DynamoDB
+        for player_id, tracking_data in stat_tracking.items():
+            try:
+                dynamo_data = table.get_item(Key={"player_id": player_id})
+                if "Item" not in dynamo_data:
+                    item = {
+                        "player_id": player_id,
+                        "name": "",
+                        "past_games": {},
+                    }
+                else:
+                    item = dynamo_data["Item"]
+
+                item["past_games"][given_date.strftime("%Y-%m-%d")] = {
+                    "game_pk": game_pk,
+                    "pitch_tracking": tracking_data,
+                }
+
+                table.put_item(Item=item)
+            except Exception as e:
+                print(f"Error saving data for player {player_id}: {e}")
+                continue
+
+        """
         boxscore = get_boxscore(game_pk)
 
         for player_key in boxscore["liveData"]["boxscore"]["teams"]["home"]["players"].keys():
@@ -72,3 +177,4 @@ def load_daily_player_stats(given_date: date = date.today()):
         for player_key in boxscore["liveData"]["boxscore"]["teams"]["away"]["players"].keys():
             player_stats = boxscore["liveData"]["boxscore"]["teams"]["away"]["players"][player_key]
             save_player_data(player_stats, game_pk, given_date)
+        """

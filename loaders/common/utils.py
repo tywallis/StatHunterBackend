@@ -52,7 +52,6 @@ def get_players(home_away_dict):
     rows = []
     for home_away, v in home_away_dict.items():
         players = v["players"]
-        # print("\n{} - {}".format(v["team"], v["lineupStatus"]))
         for idx, player in enumerate(players):
             if home_away == "Home":
                 team = home_away_dict["Home"]["team"]
@@ -111,8 +110,6 @@ def get_lineups(game_day: str = "today"):
         try:
             awayTeam = lineupBox.find("div", {"class": "lineup__team is-visit"}).text.strip()
             homeTeam = lineupBox.find("div", {"class": "lineup__team is-home"}).text.strip()
-
-            # print(f"\n\n############\n  {awayTeam} @ {homeTeam}\n############")
 
             awayLineup = lineupBox.find("ul", {"lineup__list is-visit"})
             homeLineup = lineupBox.find("ul", {"lineup__list is-home"})

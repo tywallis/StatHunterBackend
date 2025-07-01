@@ -13,8 +13,10 @@ def process_batters(batters, vs_pitcher_stats, team, vs_pitcher, results):
         batter_l5 = get_batter_history(row["Player ID"])
         batter_name = row["Name"]
         batter_hand = row["Handedness"]
-        pitcher_ba = vs_pitcher_stats[row["Handedness"]]["stats"][0]["splits"][0]["stat"]["avg"] if vs_pitcher_stats[row["Handedness"]]["stats"][0]["splits"] else 0
+        pitcher_ba = vs_pitcher_stats[row["Handedness"]]["stats"][0]["splits"][0]["stat"]["avg"] if vs_pitcher_stats[row["Handedness"]]["stats"] and vs_pitcher_stats[row["Handedness"]]["stats"][0]["splits"] else 0
         batter_stats_dynamo_row = {
+            "batter_id": row["Player ID"],
+            "pitcher_id": vs_pitcher["Player ID"].values[0],
             "batter_team": get_team_abbreviation(team),
             "batter_name": f"{batter_name} ({batter_hand})",
             "batter_ba": batter_mlb_stats["avg"],
