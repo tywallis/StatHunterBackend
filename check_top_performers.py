@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Script to check top performers' actual performance against predictions.
-Finds the top 2 hitters, top 3 strikers, and top 3 walkers for each day
+Finds the top 2 hitters, top 2 strikers, and top 3 walkers for each day
 and verifies if they achieved at least 1 of their projected stat using statsapi.
 """
 
@@ -61,7 +61,7 @@ class PerformanceChecker:
         summary_section = content.split("*** TOP PERFORMERS SUMMARY FOR")[1] if "*** TOP PERFORMERS SUMMARY FOR" in content else ""
         
         top_hitters = self._extract_top_performers(summary_section, "TOP 10 MOST LIKELY TO GET A HIT:", 2)
-        top_strikers = self._extract_top_performers(summary_section, "TOP 10 MOST LIKELY TO STRIKEOUT:", 3)
+        top_strikers = self._extract_top_performers(summary_section, "TOP 10 MOST LIKELY TO STRIKEOUT:", 2)
         top_walkers = self._extract_top_performers(summary_section, "TOP 10 MOST LIKELY TO WALK:", 3)
         
         return {
@@ -244,16 +244,16 @@ class PerformanceChecker:
             'walkers': 0.0
         }
         
-        # HITTERS: Both top hitters must get a hit (+1.5), otherwise (-1)
+        # HITTERS: Both top hitters must get a hit (+1), otherwise (-1)
         hitter_successes = sum(1 for entry in results['hitters'] if entry['performance']['achieved'])
         if hitter_successes == len(results['hitters']) and len(results['hitters']) >= 2:
-            daily_profit['hitters'] = 1.5
+            daily_profit['hitters'] = 1.0
         else:
             daily_profit['hitters'] = -1.0
         
-        # STRIKERS: All three top strikers must get a strikeout (+1.0), otherwise (-1)
+        # STRIKERS: Both top strikers must get a strikeout (+1), otherwise (-1)
         striker_successes = sum(1 for entry in results['strikers'] if entry['performance']['achieved'])
-        if striker_successes == len(results['strikers']) and len(results['strikers']) >= 3:
+        if striker_successes == len(results['strikers']) and len(results['strikers']) >= 2:
             daily_profit['strikers'] = 1.0
         else:
             daily_profit['strikers'] = -1.0
@@ -411,7 +411,7 @@ class PerformanceChecker:
                 print(f"   Game Stats: {stats['hits']}H, {stats['strikeouts']}K, {stats['walks']}BB in {stats['at_bats']}AB")
         
         # Print strikers results
-        print(f"\nTOP 3 STRIKERS:")
+        print(f"\nTOP 2 STRIKERS:")
         print(f"{'-'*50}")
         for i, entry in enumerate(results['strikers'], 1):
             player = entry['player']
@@ -699,7 +699,7 @@ def main():
     
     parser = argparse.ArgumentParser(description='Check top performers against actual game results')
     parser.add_argument('--date', help='Specific date to analyze (YYYY-MM-DD format)')
-    parser.add_argument('--days', type=int, default=7, help='Number of recent days to analyze (default: 7)')
+    parser.add_argument('--days', type=int, default=5, help='Number of recent days to analyze (default: 30)')
     parser.add_argument('--graph', action='store_true', help='Generate profit line graph (default: auto for multi-day analysis)')
     parser.add_argument('--no-graph', action='store_true', help='Skip generating profit line graph')
     

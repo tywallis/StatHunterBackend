@@ -6,9 +6,9 @@ import statsapi
 from decimal import Decimal
 
 from lineups import get_team_lineups
-from loaders.custom_data.app import get_games_by_date
+from loaders.custom_data.app import get_games_by_date, load_daily_player_stats
 from pitch_outcome_predictor import get_outcome_probabilities
-from plate_appearance_predictor import analyze_plate_appearance
+from plate_appearance_predictor import calculate_plate_appearance_outcomes
 
 table_name = "custom-player-data"
 dynamodb = boto3.resource("dynamodb")
@@ -138,13 +138,13 @@ def analyze_games_for_date(date, games):
                     for batter_id in home_batter_ids:
                         if lineups is not None:
                             batter_name = lineups.loc[lineups['Player ID'] == batter_id, 'Name'].values[0]
-                            vs_pitcher = lineups.loc[lineups['Player ID'] == away_pitcher_id, 'Name'].values[0]
                         else:
                             # Check if they are a sub hitter
                             if int(box_score['home']['players'].get(f'ID{batter_id}', {}).get('battingOrder', "1")) % 100 != 0:
                                 continue
                             batter_name = box_score['playerInfo'][f'ID{batter_id}']['fullName']
-                            vs_pitcher = box_score['playerInfo'][f'ID{away_pitcher_id}']['fullName']
+                        
+                        vs_pitcher = away_pitcher_name
                         batter_data = get_player_data(batter_id)
                         if len(batter_data.get("past_games", [])) == 0:
                             continue
@@ -162,20 +162,28 @@ def analyze_games_for_date(date, games):
                             date=game['gameDate'],
                         )
 
+                        # If any outcome probabilities are "-1", skip this batter
+                        if any(float(prob) == -1.0 for prob in outcome_probabilities.values()):
+                            continue
+
                         # Calculate PA outcome predictions
-                        pa_analysis = analyze_plate_appearance(outcome_probabilities)
-                        pa_outcomes = pa_analysis['plate_appearance_outcomes']
+                        pa_outcomes = calculate_plate_appearance_outcomes(
+                            ball_prob=float(outcome_probabilities['ball']),
+                            strike_prob=float(outcome_probabilities['strike']),
+                            hit_prob=float(outcome_probabilities['hit']),
+                            out_prob=float(outcome_probabilities['out']),
+                            foul_prob=float(outcome_probabilities['foul']),
+                        )
                         
                         # Store batter data for summary
                         batter_summary = {
                             'name': batter_name,
                             'team': home_team,
                             'vs_pitcher': vs_pitcher,
-                            'hit_prob': pa_outcomes['hit'],
-                            'strikeout_prob': pa_outcomes['strikeout'],
-                            'walk_prob': pa_outcomes['walk'],
-                            'other_out_prob': pa_outcomes['other'],
-                            'est_pitches': pa_analysis['estimated_pitches_per_pa'],
+                            'hit_prob': pa_outcomes['Hit'],
+                            'strikeout_prob': pa_outcomes['Strikeout'],
+                            'walk_prob': pa_outcomes['Walk'],
+                            'other_out_prob': pa_outcomes['Out'],
                             'game': f"Game {game_counter}"
                         }
                         all_batters.append(batter_summary)
@@ -183,18 +191,17 @@ def analyze_games_for_date(date, games):
                         file.write(f"{batter_name}\n")
 
                         # Handle unknown data (-1 values)
-                        if pa_outcomes['hit'] == -1:
+                        if pa_outcomes['Hit'] == -1:
                             file.write("Hit: Unknown (insufficient data)\n")
                             file.write("Strikeout: Unknown (insufficient data)\n")
                             file.write("Walk: Unknown (insufficient data)\n")
                             file.write("Other Out: Unknown (insufficient data)\n")
                             file.write("Est. Pitches: Unknown (insufficient data)\n")
                         else:
-                            file.write(f"Hit: {pa_outcomes['hit']:.3f} ({pa_outcomes['hit']*100:.1f}%)\n")
-                            file.write(f"Strikeout: {pa_outcomes['strikeout']:.3f} ({pa_outcomes['strikeout']*100:.1f}%)\n")
-                            file.write(f"Walk: {pa_outcomes['walk']:.3f} ({pa_outcomes['walk']*100:.1f}%)\n")
-                            file.write(f"Other Out: {pa_outcomes['other']:.3f} ({pa_outcomes['other']*100:.1f}%)\n")
-                            file.write(f"Est. Pitches: {pa_analysis['estimated_pitches_per_pa']:.1f}\n")
+                            file.write(f"Hit: {pa_outcomes['Hit']:.3f} ({pa_outcomes['Hit']*100:.1f}%)\n")
+                            file.write(f"Strikeout: {pa_outcomes['Strikeout']:.3f} ({pa_outcomes['Strikeout']*100:.1f}%)\n")
+                            file.write(f"Walk: {pa_outcomes['Walk']:.3f} ({pa_outcomes['Walk']*100:.1f}%)\n")
+                            file.write(f"Other Out: {pa_outcomes['Out']:.3f} ({pa_outcomes['Out']*100:.1f}%)\n")
                         file.write("\n")
 
                 # Away team vs Home pitcher
@@ -207,14 +214,13 @@ def analyze_games_for_date(date, games):
                     for batter_id in away_batter_ids:
                         if lineups is not None:
                             batter_name = lineups.loc[lineups['Player ID'] == batter_id, 'Name'].values[0]
-                            vs_pitcher = lineups.loc[lineups['Player ID'] == away_pitcher_id, 'Name'].values[0]
                         else:
                             # Check if they are a sub hitter
                             if int(box_score['away']['players'].get(f'ID{batter_id}', {}).get('battingOrder', "1")) % 100 != 0:
                                 continue
                             batter_name = box_score['playerInfo'][f'ID{batter_id}']['fullName']
-                            vs_pitcher = box_score['playerInfo'][f'ID{away_pitcher_id}']['fullName']
                         
+                        vs_pitcher = home_pitcher_name
                         batter_data = get_player_data(batter_id)
                         if len(batter_data.get("past_games", [])) == 0:
                             continue
@@ -232,20 +238,28 @@ def analyze_games_for_date(date, games):
                             date=game['gameDate'],
                         )
 
+                        # If any outcome probabilities are "-1", skip this batter
+                        if any(float(prob) == -1.0 for prob in outcome_probabilities.values()):
+                            continue
+
                         # Calculate PA outcome predictions
-                        pa_analysis = analyze_plate_appearance(outcome_probabilities)
-                        pa_outcomes = pa_analysis['plate_appearance_outcomes']
+                        pa_outcomes = calculate_plate_appearance_outcomes(
+                            ball_prob=float(outcome_probabilities['ball']),
+                            strike_prob=float(outcome_probabilities['strike']),
+                            hit_prob=float(outcome_probabilities['hit']),
+                            out_prob=float(outcome_probabilities['out']),
+                            foul_prob=float(outcome_probabilities['foul']),
+                        )
                         
                         # Store batter data for summary
                         batter_summary = {
                             'name': batter_name,
                             'team': away_team,
-                            'vs_pitcher': away_pitcher_name,
-                            'hit_prob': pa_outcomes['hit'],
-                            'strikeout_prob': pa_outcomes['strikeout'],
-                            'walk_prob': pa_outcomes['walk'],
-                            'other_out_prob': pa_outcomes['other'],
-                            'est_pitches': pa_analysis['estimated_pitches_per_pa'],
+                            'vs_pitcher': vs_pitcher,
+                            'hit_prob': pa_outcomes['Hit'],
+                            'strikeout_prob': pa_outcomes['Strikeout'],
+                            'walk_prob': pa_outcomes['Walk'],
+                            'other_out_prob': pa_outcomes['Out'],
                             'game': f"Game {game_counter}"
                         }
                         all_batters.append(batter_summary)
@@ -253,18 +267,16 @@ def analyze_games_for_date(date, games):
                         file.write(f"{batter_name}\n")
 
                         # Handle unknown data (-1 values)
-                        if pa_outcomes['hit'] == -1:
+                        if pa_outcomes['Hit'] == -1:
                             file.write("Hit: Unknown (insufficient data)\n")
                             file.write("Strikeout: Unknown (insufficient data)\n")
                             file.write("Walk: Unknown (insufficient data)\n")
                             file.write("Other Out: Unknown (insufficient data)\n")
-                            file.write("Est. Pitches: Unknown (insufficient data)\n")
                         else:
-                            file.write(f"Hit: {pa_outcomes['hit']:.3f} ({pa_outcomes['hit']*100:.1f}%)\n")
-                            file.write(f"Strikeout: {pa_outcomes['strikeout']:.3f} ({pa_outcomes['strikeout']*100:.1f}%)\n")
-                            file.write(f"Walk: {pa_outcomes['walk']:.3f} ({pa_outcomes['walk']*100:.1f}%)\n")
-                            file.write(f"Other Out: {pa_outcomes['other']:.3f} ({pa_outcomes['other']*100:.1f}%)\n")
-                            file.write(f"Est. Pitches: {pa_analysis['estimated_pitches_per_pa']:.1f}\n")
+                            file.write(f"Hit: {pa_outcomes['Hit']:.3f} ({pa_outcomes['Hit']*100:.1f}%)\n")
+                            file.write(f"Strikeout: {pa_outcomes['Strikeout']:.3f} ({pa_outcomes['Strikeout']*100:.1f}%)\n")
+                            file.write(f"Walk: {pa_outcomes['Walk']:.3f} ({pa_outcomes['Walk']*100:.1f}%)\n")
+                            file.write(f"Other Out: {pa_outcomes['Out']:.3f} ({pa_outcomes['Out']*100:.1f}%)\n")
                         file.write("\n")
                         
             except Exception as e:
@@ -272,68 +284,14 @@ def analyze_games_for_date(date, games):
             
             # Add separator between games
             file.write("\n" + "="*80 + "\n\n")
-        
-        # Add summary section at the bottom
-        if all_batters:
-            file.write("\n\n")
-            file.write("*** TOP PERFORMERS SUMMARY FOR " + date_str + " ***\n")
-            file.write("="*80 + "\n\n")
-            
-            # Filter out batters with unknown data (-1 values)
-            valid_batters = [b for b in all_batters if b['hit_prob'] != -1]
-            unknown_count = len(all_batters) - len(valid_batters)
-            
-            if unknown_count > 0:
-                file.write(f"Note: {unknown_count} batter matchups excluded due to insufficient data (<100 pitches vs handedness)\n\n")
-            
-            if valid_batters:
-                # Top 10 most likely to get a hit
-                file.write("TOP 10 MOST LIKELY TO GET A HIT:\n")
-                file.write("-" * 50 + "\n")
-                top_hits = sorted(valid_batters, key=lambda x: x['hit_prob'], reverse=True)[:10]
-                for i, batter in enumerate(top_hits, 1):
-                    file.write(f"{i:2d}. {batter['name']:<25} ({batter['team']}) - {batter['hit_prob']:.1%}\n")
-                    file.write(f"    vs {batter['vs_pitcher']} | {batter['game']}\n")
-                
-                file.write(f"\nTOP 10 MOST LIKELY TO STRIKEOUT:\n")
-                file.write("-" * 50 + "\n")
-                top_strikeouts = sorted(valid_batters, key=lambda x: x['strikeout_prob'], reverse=True)[:10]
-                for i, batter in enumerate(top_strikeouts, 1):
-                    file.write(f"{i:2d}. {batter['name']:<25} ({batter['team']}) - {batter['strikeout_prob']:.1%}\n")
-                    file.write(f"    vs {batter['vs_pitcher']} | {batter['game']}\n")
-                
-                file.write(f"\nTOP 10 MOST LIKELY TO WALK:\n")
-                file.write("-" * 50 + "\n")
-                top_walks = sorted(valid_batters, key=lambda x: x['walk_prob'], reverse=True)[:10]
-                for i, batter in enumerate(top_walks, 1):
-                    file.write(f"{i:2d}. {batter['name']:<25} ({batter['team']}) - {batter['walk_prob']:.1%}\n")
-                    file.write(f"    vs {batter['vs_pitcher']} | {batter['game']}\n")
-                
-                # Overall stats (excluding unknown data)
-                avg_hit = sum(b['hit_prob'] for b in valid_batters) / len(valid_batters)
-                avg_k = sum(b['strikeout_prob'] for b in valid_batters) / len(valid_batters)
-                avg_bb = sum(b['walk_prob'] for b in valid_batters) / len(valid_batters)
-                avg_other = sum(b['other_out_prob'] for b in valid_batters) / len(valid_batters)
-                avg_pitches = sum(b['est_pitches'] for b in valid_batters) / len(valid_batters)
-                
-                file.write(f"\nOVERALL AVERAGES ({len(valid_batters)} valid matchups):\n")
-                file.write("-" * 50 + "\n")
-                file.write(f"Average Hit Rate:        {avg_hit:.1%}\n")
-                file.write(f"Average Strikeout Rate:  {avg_k:.1%}\n")
-                file.write(f"Average Walk Rate:       {avg_bb:.1%}\n")
-                file.write(f"Average Other Out Rate:  {avg_other:.1%}\n")
-                file.write(f"Average Pitches/PA:      {avg_pitches:.1f}\n")
-            else:
-                file.write("No valid matchups with sufficient data for analysis.\n")
-            file.write(f"Total Outcome Rate:      {avg_hit + avg_k + avg_bb + avg_other:.1%}\n")
 
-
-for date in pd.date_range(start="2025-05-01", end="2025-06-17"):
+for date in pd.date_range(start="2025-07-14", end=datetime.date.today()):
     # If date is in June or later, analyze the data
-    if date.month >= 5:
+    if date.month == datetime.date.today().month and date.day == datetime.date.today().day:
         games = get_games_by_date(date)
         if len(games) > 0:
             print(f"Analyzing {len(games)} total games for {date.strftime('%Y-%m-%d')}...")
             analyze_games_for_date(date, games)
 
-    # load_daily_player_stats(date)
+    else:
+        load_daily_player_stats(date)
