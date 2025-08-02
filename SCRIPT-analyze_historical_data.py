@@ -292,7 +292,8 @@ def analyze_games_for_date(date, games):
                     batter_info=batter_data,
                     pitcher_handedness=away_pitcher_hand[0].upper(),
                     batter_handedness=batter_hand[0].upper(),
-                    date=game['gameDate'],
+                    cutoff_date_before=game['gameDate'],
+                    cutoff_date_after=(game_date - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
                 )
 
                 if any(float(prob) == -1.0 for prob in outcome_probabilities.values()):
@@ -382,7 +383,8 @@ def analyze_games_for_date(date, games):
                     batter_info=batter_data,
                     pitcher_handedness=home_pitcher_hand[0].upper(),
                     batter_handedness=batter_hand[0].upper(),
-                    date=game['gameDate'],
+                    cutoff_date_before=game['gameDate'],
+                    cutoff_date_after=(game_date - datetime.timedelta(days=30)).strftime('%Y-%m-%d')
                 )
 
                 if any(float(prob) == -1.0 for prob in outcome_probabilities.values()):
@@ -447,8 +449,13 @@ def analyze_games_for_date(date, games):
     
     print(f"Analysis saved to {date_str}.json")
 
-for date in pd.date_range(start="2025-07-18", end=datetime.date.today()):
-    # If date is in June or later, analyze the data
+yesterday = datetime.date.today() - datetime.timedelta(days=1)
+today = datetime.date.today()
+for date in pd.date_range(start=yesterday, end=today):
+    # Skip July 15th (All-Star Game)
+    if date.month == 7 and date.day == 15:
+        continue
+
     if date.month == datetime.date.today().month and date.day == datetime.date.today().day:
         games = get_games_by_date(date)
         if len(games) > 0:

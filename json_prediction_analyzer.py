@@ -15,7 +15,8 @@ from datetime import datetime
 import argparse
 
 class JSONPredictionAnalyzer:
-    def __init__(self):
+    def __init__(self, bin_size: int = 2):
+        self.bin_size = bin_size
         self.accuracy_bins = {
             'hit': defaultdict(lambda: {'predicted': [], 'actual': []}),
             'strikeout': defaultdict(lambda: {'predicted': [], 'actual': []}),
@@ -28,14 +29,14 @@ class JSONPredictionAnalyzer:
         if percentage <= 1.0:
             percentage *= 100
             
-        # Create 2% bins
-        bin_number = int(percentage // 2) * 2
+        # Create bins based on bin_size
+        bin_number = int(percentage // self.bin_size) * self.bin_size
         if bin_number >= 100:
-            return "98-100%"
-        elif bin_number < 2:
-            return "0-2%"
+            return f"{100 - self.bin_size}-100%"
+        elif bin_number < self.bin_size:
+            return f"0-{self.bin_size}%"
         else:
-            return f"{bin_number}-{bin_number + 2}%"
+            return f"{bin_number}-{bin_number + self.bin_size}%"
     
     def get_game_boxscore(self, game_id: str) -> dict:
         """Get boxscore data for a specific game."""
@@ -207,13 +208,14 @@ class JSONPredictionAnalyzer:
         for stat_type in ['hit', 'strikeout', 'walk']:
             bin_stats[stat_type] = {}
             
-            # Create 2% bins from 0-100%
+            # Create bins from 0-100% based on bin_size
             bin_labels = []
-            for i in range(0, 100, 2):
-                if i == 98:
-                    bin_labels.append("98-100%")
+            for i in range(0, 100, self.bin_size):
+                if i + self.bin_size >= 100:
+                    bin_labels.append(f"{i}-100%")
+                    break
                 else:
-                    bin_labels.append(f"{i}-{i+2}%")
+                    bin_labels.append(f"{i}-{i + self.bin_size}%")
             
             for bin_label in bin_labels:
                 bin_data = self.accuracy_bins[stat_type][bin_label]
@@ -248,20 +250,22 @@ class JSONPredictionAnalyzer:
             
             # Create ordered list of bins with their centers
             bin_data = []
-            for i in range(0, 100, 2):
-                if i == 98:
-                    bin_label = "98-100%"
-                    bin_center = 99.0
+            for i in range(0, 100, self.bin_size):
+                if i + self.bin_size >= 100:
+                    bin_label = f"{i}-100%"
+                    bin_center = (i + 100) / 2
+                    end_val = 100
                 else:
-                    bin_label = f"{i}-{i+2}%"
-                    bin_center = i + 1.0
+                    bin_label = f"{i}-{i + self.bin_size}%"
+                    bin_center = i + (self.bin_size / 2)
+                    end_val = i + self.bin_size
                 
                 stats = bin_stats[stat_type][bin_label]
                 bin_data.append({
                     'label': bin_label,
                     'center': bin_center,
                     'start': i,
-                    'end': i + 2 if i < 98 else 100,
+                    'end': end_val,
                     'sample_size': stats['sample_size'],
                     'predicted_sum': stats['avg_predicted_rate'] * stats['sample_size'] if stats['sample_size'] > 0 else 0,
                     'actual_sum': stats['actual_success_rate'] * stats['sample_size'] / 100 if stats['sample_size'] > 0 else 0
@@ -324,7 +328,7 @@ class JSONPredictionAnalyzer:
     def print_accuracy_analysis(self, bin_stats):
         """Print detailed accuracy analysis."""
         print(f"\n{'='*100}")
-        print(f"PREDICTION ACCURACY ANALYSIS")
+        print(f"PREDICTION ACCURACY ANALYSIS (Bin Size: {self.bin_size}%)")
         print(f"{'='*100}")
         
         # Combine small bins first
@@ -372,9 +376,9 @@ class JSONPredictionAnalyzer:
         """Create calibration plots showing predicted vs actual success rates."""
         # Combine small bins first
         combined_stats = self.combine_small_bins(bin_stats, min_sample_size=50)
-        
+
         fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-        fig.suptitle('Prediction Calibration Analysis (JSON Data - Combined Bins)', fontsize=16, fontweight='bold')
+        fig.suptitle(f'Prediction Calibration Analysis (JSON Data - {self.bin_size}% Bins)', fontsize=16, fontweight='bold')
         
         stat_types = ['hit', 'strikeout', 'walk']
         titles = ['Hits (Getting a Hit)', 'Strikeouts (Getting a Strikeout)', 'Walks (Getting a Walk)']
@@ -504,10 +508,11 @@ def main():
     parser = argparse.ArgumentParser(description='Analyze JSON prediction accuracy')
     parser.add_argument('--directory', '-d', default='.', help='Directory to search for JSON files')
     parser.add_argument('--pattern', '-p', default='*.json', help='File pattern to match')
+    parser.add_argument('--bin-size', '-b', type=int, default=2, help='Bin size in percentage points (default: 2)')
     
     args = parser.parse_args()
     
-    analyzer = JSONPredictionAnalyzer()
+    analyzer = JSONPredictionAnalyzer(bin_size=args.bin_size)
     analyzer.run_analysis(args.directory, args.pattern)
 
 

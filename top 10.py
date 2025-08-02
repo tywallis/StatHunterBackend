@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import pandas as pd
 from typing import List, Dict, Any
@@ -97,7 +98,7 @@ def print_results(results: Dict[str, List[Dict[str, Any]]]):
 def main():
     try:
         # Load JSON data
-        filename = '2025-07-19.json'  # Your JSON filename
+        filename = f"{datetime.today().strftime('%Y-%m-%d')}.json"  # Your JSON filename
         data = load_json_data(filename)
         
         print(f"Data loaded successfully from {filename}!")

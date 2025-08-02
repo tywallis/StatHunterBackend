@@ -7,7 +7,7 @@ def load_json_data(file_path: str) -> Dict:
     with open(file_path, 'r') as f:
         return json.load(f)
 
-def calculate_pitcher_tendencies(pitcher_data: Dict, cutoff_date: str = None) -> Dict[str, Dict[str, Dict[str, float]]]:
+def calculate_pitcher_tendencies(pitcher_data: Dict, cutoff_date_before: str = None, cutoff_date_after: str = None) -> Dict[str, Dict[str, Dict[str, float]]]:
     """
     Calculate pitcher tendencies (probability of throwing each pitch type in each zone).
     
@@ -25,7 +25,9 @@ def calculate_pitcher_tendencies(pitcher_data: Dict, cutoff_date: str = None) ->
     
     for game_date, game_data in pitcher_data['past_games'].items():
         # Filter games by date if cutoff_date is provided
-        if cutoff_date and game_date >= cutoff_date:
+        if cutoff_date_before and game_date >= cutoff_date_before:
+            continue
+        if cutoff_date_after and game_date <= cutoff_date_after:
             continue
         pitching_data = game_data['pitch_tracking'].get('pitching', {})
         if not pitching_data:
@@ -62,7 +64,7 @@ def calculate_pitcher_tendencies(pitcher_data: Dict, cutoff_date: str = None) ->
     
     return dict(tendencies)
 
-def calculate_batter_outcomes(batter_data: Dict, cutoff_date: str = None) -> Dict[str, Dict[str, Dict[str, Dict[str, float]]]]:
+def calculate_batter_outcomes(batter_data: Dict, cutoff_date_before: str = None, cutoff_date_after: str = None) -> Dict[str, Dict[str, Dict[str, Dict[str, float]]]]:
     """
     Calculate batter outcome probabilities for each pitch type and zone.
     
@@ -83,7 +85,9 @@ def calculate_batter_outcomes(batter_data: Dict, cutoff_date: str = None) -> Dic
     
     for game_date, game_data in batter_data['past_games'].items():
         # Filter games by date if cutoff_date is provided
-        if cutoff_date and game_date >= cutoff_date:
+        if cutoff_date_before and game_date >= cutoff_date_before:
+            continue
+        if cutoff_date_after and game_date <= cutoff_date_after:
             continue
         batting_data = game_data['pitch_tracking'].get('batting', {})
 
@@ -167,7 +171,7 @@ def calculate_batter_outcomes(batter_data: Dict, cutoff_date: str = None) -> Dic
     
     return dict(outcomes)
 
-def predict_pitch_outcomes(pitcher_info: Dict[str, Any], batter_info: Dict[str, Any], pitcher_handedness: str, batter_handedness: str, cutoff_date: str = None) -> Dict[str, Dict[str, float]]:
+def predict_pitch_outcomes(pitcher_info: Dict[str, Any], batter_info: Dict[str, Any], pitcher_handedness: str, batter_handedness: str, cutoff_date_before: str = None, cutoff_date_after: str = None) -> Dict[str, Dict[str, float]]:
     """
     Predict outcomes for all possible pitch type/zone combinations.
     
@@ -182,8 +186,8 @@ def predict_pitch_outcomes(pitcher_info: Dict[str, Any], batter_info: Dict[str, 
         Dictionary with pitch_type_zone as keys and outcome probabilities as values
     """
     # Calculate tendencies and outcomes
-    pitcher_tendencies = calculate_pitcher_tendencies(pitcher_info, cutoff_date)
-    batter_outcomes = calculate_batter_outcomes(batter_info, cutoff_date)
+    pitcher_tendencies = calculate_pitcher_tendencies(pitcher_info, cutoff_date_before, cutoff_date_after)
+    batter_outcomes = calculate_batter_outcomes(batter_info, cutoff_date_before, cutoff_date_after)
 
     # Determine handedness keys - pitcher throws to LHB/RHB, batter faces LHP/RHP
     pitcher_vs = 'vs_LHB' if batter_handedness == 'L' else 'vs_RHB'
@@ -305,7 +309,7 @@ def print_predictions_summary(predictions: Dict, overall_odds: Dict[str, float])
             outcome_total += prob
         print(f"    Total: {outcome_total:.3f} ({outcome_total*100:.1f}%)")
 
-def count_batter_pitches_vs_handedness(batter_data: Dict, pitcher_handedness: str, cutoff_date: str = None) -> int:
+def count_batter_pitches_vs_handedness(batter_data: Dict, pitcher_handedness: str, cutoff_date_before: str = None, cutoff_date_after: str = None) -> int:
     """
     Count total number of pitches a batter has faced from a specific pitcher handedness.
     
@@ -324,9 +328,11 @@ def count_batter_pitches_vs_handedness(batter_data: Dict, pitcher_handedness: st
     
     for game_date, game_data in batter_data['past_games'].items():
         # Filter games by date if cutoff_date is provided
-        if cutoff_date and game_date >= cutoff_date:
+        if cutoff_date_before and game_date >= cutoff_date_before:
             continue
-        
+        if cutoff_date_after and game_date <= cutoff_date_after:
+            continue
+
         batting_data = game_data['pitch_tracking'].get('batting', {})
         if not batting_data:
             continue
@@ -342,14 +348,14 @@ def count_batter_pitches_vs_handedness(batter_data: Dict, pitcher_handedness: st
     
     return total_pitches
 
-def get_outcome_probabilities(pitcher_info: Dict[str, Any], batter_info: Dict[str, Any], pitcher_handedness: str, batter_handedness: str, date: str) -> Dict[str, Any]:
+def get_outcome_probabilities(pitcher_info: Dict[str, Any], batter_info: Dict[str, Any], pitcher_handedness: str, batter_handedness: str, cutoff_date_before: str, cutoff_date_after: str) -> Dict[str, Any]:
     """
     Get outcome probabilities for a batter vs pitcher matchup.
     Returns -1 for all outcomes if batter has faced fewer than 100 pitches from this pitcher handedness.
     """
     # Count total pitches faced by batter from this pitcher handedness
-    total_pitches = count_batter_pitches_vs_handedness(batter_info, pitcher_handedness, date)
-    
+    total_pitches = count_batter_pitches_vs_handedness(batter_info, pitcher_handedness, cutoff_date_before, cutoff_date_after)
+
     # If insufficient data (< 100 pitches), return unknown for all outcomes
     if total_pitches < 100:
         return {
@@ -366,7 +372,8 @@ def get_outcome_probabilities(pitcher_info: Dict[str, Any], batter_info: Dict[st
         batter_info, 
         pitcher_handedness,
         batter_handedness,
-        date  # Pass the date as cutoff_date parameter
+        cutoff_date_before,
+        cutoff_date_after
     )
     
     # Calculate overall odds
