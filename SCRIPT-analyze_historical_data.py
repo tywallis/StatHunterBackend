@@ -47,24 +47,6 @@ def get_player_data(player_id: int) -> dict:
     return convert_decimals(item)
 
 
-def get_preferred_bat_side(player_id: int) -> str:
-    try:
-        pitcher_stats_vlhb = requests.get(f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats?group=pitching&season=2025&stats=statSplits&sitCodes=vl").json()
-        pitcher_stats_vrhb = requests.get(f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats?group=pitching&season=2025&stats=statSplits&sitCodes=vr").json()
-
-        if pitcher_stats_vlhb and pitcher_stats_vrhb:
-            kp_vlhb = round(pitcher_stats_vlhb["stats"][0]["splits"][-1]["stat"]["strikeOuts"] / pitcher_stats_vlhb["stats"][0]["splits"][-1]["stat"]["battersFaced"], 3)
-            kp_vrhb = round(pitcher_stats_vrhb["stats"][0]["splits"][-1]["stat"]["strikeOuts"] / pitcher_stats_vrhb["stats"][0]["splits"][-1]["stat"]["battersFaced"], 3)
-
-        if kp_vlhb > kp_vrhb:
-            return "Left"
-        else:
-            return "Right"
-    except Exception as e:
-        print(f"Error fetching preferred bat side for player {player_id}: {e}")
-        return "Unknown"
-
-
 def get_team_pa_data(team_id: int) -> dict:
     """Get stored PA data from DynamoDB for a specific team"""
     response = table.get_item(Key={"player_id": team_id})
@@ -284,7 +266,7 @@ def analyze_games_for_date(date, games):
                 batter_hand = statsapi.player_stat_data(batter_id, "hitting")["bat_side"]
 
                 if batter_hand == "Switch":
-                    batter_hand = get_preferred_bat_side(batter_id)
+                    batter_hand = "Left" if away_pitcher_hand == "Right" else "Right"
 
                 print(f"Game {game_counter}: Analyzing batter {batter_id} ({batter_hand}) against away pitcher {away_pitcher_id} ({away_pitcher_hand})...")
                 outcome_probabilities = get_outcome_probabilities(
@@ -375,7 +357,7 @@ def analyze_games_for_date(date, games):
                 batter_hand = statsapi.player_stat_data(batter_id, "hitting")["bat_side"]
                 
                 if batter_hand == "Switch":
-                    batter_hand = get_preferred_bat_side(batter_id)
+                    batter_hand = "Left" if away_pitcher_hand == "Right" else "Right"
                 
                 print(f"Game {game_counter}: Analyzing batter {batter_id} ({batter_hand}) against home pitcher {home_pitcher_id} ({home_pitcher_hand})...")
                 outcome_probabilities = get_outcome_probabilities(
@@ -451,6 +433,8 @@ def analyze_games_for_date(date, games):
 
 yesterday = datetime.date.today() - datetime.timedelta(days=1)
 today = datetime.date.today()
+start = datetime.date(2025, 5, 1) 
+end = datetime.date(2025, 6, 30)
 for date in pd.date_range(start=yesterday, end=today):
     # Skip July 15th (All-Star Game)
     if date.month == 7 and date.day == 15:
