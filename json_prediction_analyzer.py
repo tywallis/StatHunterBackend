@@ -15,8 +15,9 @@ from datetime import datetime
 import argparse
 
 class JSONPredictionAnalyzer:
-    def __init__(self, bin_size: int = 2):
+    def __init__(self, bin_size: int = 2, min_percent: float = 0.0):
         self.bin_size = bin_size
+        self.min_percent = min_percent / 100.0 if min_percent > 1.0 else min_percent  # Convert to 0-1 scale if needed
         self.accuracy_bins = {
             'hit': defaultdict(lambda: {'predicted': [], 'actual': []}),
             'strikeout': defaultdict(lambda: {'predicted': [], 'actual': []}),
@@ -177,29 +178,44 @@ class JSONPredictionAnalyzer:
             # Hit predictions
             if 'hit' in per_game_probs and per_game_probs['hit'] > 0:
                 hit_prob = per_game_probs['hit']
-                bin_label = self.get_percentage_bin(hit_prob)
-                achieved_hit = 1 if stats['hits'] >= 1 else 0
+                # Convert to 0-1 scale for comparison if needed
+                hit_prob_normalized = hit_prob if hit_prob <= 1.0 else hit_prob / 100.0
                 
-                self.accuracy_bins['hit'][bin_label]['predicted'].append(hit_prob * 100 if hit_prob <= 1 else hit_prob)
-                self.accuracy_bins['hit'][bin_label]['actual'].append(achieved_hit)
+                # Apply minimum percentage filter
+                if hit_prob_normalized >= self.min_percent:
+                    bin_label = self.get_percentage_bin(hit_prob)
+                    achieved_hit = 1 if stats['hits'] >= 1 else 0
+                    
+                    self.accuracy_bins['hit'][bin_label]['predicted'].append(hit_prob * 100 if hit_prob <= 1 else hit_prob)
+                    self.accuracy_bins['hit'][bin_label]['actual'].append(achieved_hit)
             
             # Strikeout predictions
             if 'strikeout' in per_game_probs and per_game_probs['strikeout'] > 0:
                 strikeout_prob = per_game_probs['strikeout']
-                bin_label = self.get_percentage_bin(strikeout_prob)
-                achieved_strikeout = 1 if stats['strikeouts'] >= 1 else 0
+                # Convert to 0-1 scale for comparison if needed
+                strikeout_prob_normalized = strikeout_prob if strikeout_prob <= 1.0 else strikeout_prob / 100.0
                 
-                self.accuracy_bins['strikeout'][bin_label]['predicted'].append(strikeout_prob * 100 if strikeout_prob <= 1 else strikeout_prob)
-                self.accuracy_bins['strikeout'][bin_label]['actual'].append(achieved_strikeout)
+                # Apply minimum percentage filter
+                if strikeout_prob_normalized >= self.min_percent:
+                    bin_label = self.get_percentage_bin(strikeout_prob)
+                    achieved_strikeout = 1 if stats['strikeouts'] >= 1 else 0
+                    
+                    self.accuracy_bins['strikeout'][bin_label]['predicted'].append(strikeout_prob * 100 if strikeout_prob <= 1 else strikeout_prob)
+                    self.accuracy_bins['strikeout'][bin_label]['actual'].append(achieved_strikeout)
             
             # Walk predictions
             if 'walk' in per_game_probs and per_game_probs['walk'] > 0:
                 walk_prob = per_game_probs['walk']
-                bin_label = self.get_percentage_bin(walk_prob)
-                achieved_walk = 1 if stats['walks'] >= 1 else 0
+                # Convert to 0-1 scale for comparison if needed
+                walk_prob_normalized = walk_prob if walk_prob <= 1.0 else walk_prob / 100.0
                 
-                self.accuracy_bins['walk'][bin_label]['predicted'].append(walk_prob * 100 if walk_prob <= 1 else walk_prob)
-                self.accuracy_bins['walk'][bin_label]['actual'].append(achieved_walk)
+                # Apply minimum percentage filter
+                if walk_prob_normalized >= self.min_percent:
+                    bin_label = self.get_percentage_bin(walk_prob)
+                    achieved_walk = 1 if stats['walks'] >= 1 else 0
+                    
+                    self.accuracy_bins['walk'][bin_label]['predicted'].append(walk_prob * 100 if walk_prob <= 1 else walk_prob)
+                    self.accuracy_bins['walk'][bin_label]['actual'].append(achieved_walk)
     
     def calculate_bin_statistics(self):
         """Calculate statistics for each bin."""
@@ -329,6 +345,9 @@ class JSONPredictionAnalyzer:
         """Print detailed accuracy analysis."""
         print(f"\n{'='*100}")
         print(f"PREDICTION ACCURACY ANALYSIS (Bin Size: {self.bin_size}%)")
+        if self.min_percent > 0:
+            min_percent_display = self.min_percent * 100 if self.min_percent <= 1.0 else self.min_percent
+            print(f"Minimum Prediction Threshold: {min_percent_display:.1f}%")
         print(f"{'='*100}")
         
         # Combine small bins first
@@ -378,7 +397,15 @@ class JSONPredictionAnalyzer:
         combined_stats = self.combine_small_bins(bin_stats, min_sample_size=50)
 
         fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-        fig.suptitle(f'Prediction Calibration Analysis (JSON Data - {self.bin_size}% Bins)', fontsize=16, fontweight='bold')
+        
+        # Create title with min percent info if applicable
+        title_base = f'Prediction Calibration Analysis (JSON Data - {self.bin_size}% Bins'
+        if self.min_percent > 0:
+            min_percent_display = self.min_percent * 100 if self.min_percent <= 1.0 else self.min_percent
+            title_base += f', Min: {min_percent_display:.1f}%'
+        title_base += ')'
+        
+        fig.suptitle(title_base, fontsize=16, fontweight='bold')
         
         stat_types = ['hit', 'strikeout', 'walk']
         titles = ['Hits (Getting a Hit)', 'Strikeouts (Getting a Strikeout)', 'Walks (Getting a Walk)']
@@ -509,10 +536,11 @@ def main():
     parser.add_argument('--directory', '-d', default='.', help='Directory to search for JSON files')
     parser.add_argument('--pattern', '-p', default='*.json', help='File pattern to match')
     parser.add_argument('--bin-size', '-b', type=int, default=2, help='Bin size in percentage points (default: 2)')
+    parser.add_argument('--min-percent', '-m', type=float, default=0.0, help='Minimum prediction probability threshold (0-100, default: 0)')
     
     args = parser.parse_args()
     
-    analyzer = JSONPredictionAnalyzer(bin_size=args.bin_size)
+    analyzer = JSONPredictionAnalyzer(bin_size=args.bin_size, min_percent=args.min_percent)
     analyzer.run_analysis(args.directory, args.pattern)
 
 
