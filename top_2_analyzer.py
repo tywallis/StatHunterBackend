@@ -18,11 +18,17 @@ class Top2PredictionAnalyzer:
     def __init__(self):
         self.daily_results = {
             'hit': [],
-            'strikeout': [],
-            'walk': []
+            'strikeout': []
         }
         self.daily_details = []
         self.triple_achievements = []  # Track instances of 3+ achievements
+        
+        # Track Top 1 pick performance
+        self.top1_results = {
+            'hit': [],      # Track if top 1 hit pick achieved 1+ hits
+            'strikeout': [] # Track if top 1 strikeout pick achieved 1+ strikeouts
+        }
+        self.top1_both_correct = []  # Track days when BOTH top 1 picks achieved their stats
         
     def get_game_boxscore(self, game_id: str) -> dict:
         """Get boxscore data for a specific game."""
@@ -109,8 +115,7 @@ class Top2PredictionAnalyzer:
         """Extract top 2 picks for each stat type from the summary."""
         top_picks = {
             'hit': [],
-            'strikeout': [],
-            'walk': []
+            'strikeout': []
         }
         
         # Get all batters with their probabilities
@@ -124,13 +129,12 @@ class Top2PredictionAnalyzer:
                 'name': batter_data['name'],
                 'team': batter_data['team'],
                 'hit_prob': probs.get('hit', 0),
-                'strikeout_prob': probs.get('strikeout', 0),
-                'walk_prob': probs.get('walk', 0)
+                'strikeout_prob': probs.get('strikeout', 0)
             }
             all_batters.append(batter_info)
         
         # Sort by each stat and get top 2
-        for stat in ['hit', 'strikeout', 'walk']:
+        for stat in ['hit', 'strikeout']:
             stat_key = f'{stat}_prob'
             sorted_batters = sorted(all_batters, key=lambda x: x[stat_key], reverse=True)
             
@@ -176,7 +180,7 @@ class Top2PredictionAnalyzer:
         }
         
         # Check performance for each stat type
-        for stat_type in ['hit', 'strikeout', 'walk']:
+        for stat_type in ['hit', 'strikeout']:
             picks = top_picks[stat_type]
             
             if len(picks) < 2:
@@ -240,10 +244,6 @@ class Top2PredictionAnalyzer:
                     stat_count = stats['strikeouts']
                     achieved = stat_count >= 1
                     achieved_2_plus = stat_count >= 2
-                elif stat_type == 'walk':
-                    stat_count = stats['walks']
-                    achieved = stat_count >= 1
-                    achieved_2_plus = stat_count >= 2
                 
                 # Track triple achievements (3+)
                 if stat_count >= 3:
@@ -276,6 +276,11 @@ class Top2PredictionAnalyzer:
             both_correct_2_plus = correct_2_plus_count == 2
             self.daily_results[stat_type].append(both_correct)
             
+            # Track Top 1 pick performance
+            if len(pick_results) >= 1:
+                top1_achieved = pick_results[0]['correct']
+                self.top1_results[stat_type].append(top1_achieved)
+            
             daily_detail['results'][stat_type] = {
                 'both_correct': both_correct,
                 'both_correct_2_plus': both_correct_2_plus,
@@ -287,6 +292,31 @@ class Top2PredictionAnalyzer:
             print(f"  {stat_type.upper()}: {correct_count}/2 correct (1+), {correct_2_plus_count}/2 correct (2+) ({'✓' if both_correct else '✗'})")
         
         self.daily_details.append(daily_detail)
+        
+        # Check if both top 1 picks achieved their stats for this day
+        self.check_top1_both_correct()
+    
+    def check_top1_both_correct(self):
+        """Check if both top 1 picks achieved their stats for the most recent day."""
+        if not self.daily_details:
+            return
+            
+        latest_detail = self.daily_details[-1]
+        
+        # Check if we have both hit and strikeout data
+        has_hit = 'hit' in latest_detail['results']
+        has_strikeout = 'strikeout' in latest_detail['results']
+        
+        if has_hit and has_strikeout:
+            hit_picks = latest_detail['results']['hit']['picks']
+            strikeout_picks = latest_detail['results']['strikeout']['picks']
+            
+            # Check if top 1 picks (pick 1) achieved their stats
+            hit_top1_correct = len(hit_picks) > 0 and hit_picks[0]['correct']
+            strikeout_top1_correct = len(strikeout_picks) > 0 and strikeout_picks[0]['correct']
+            
+            both_correct = hit_top1_correct and strikeout_top1_correct
+            self.top1_both_correct.append(both_correct)
     
     def print_summary_analysis(self):
         """Print summary of top 2 picks analysis."""
@@ -300,24 +330,24 @@ class Top2PredictionAnalyzer:
         days_with_all_stats = 0
         
         for detail in self.daily_details:
-            # Check if this day has results for all three stat types
-            has_all_stats = all(stat_type in detail['results'] for stat_type in ['hit', 'strikeout', 'walk'])
+            # Check if this day has results for both stat types
+            has_all_stats = all(stat_type in detail['results'] for stat_type in ['hit', 'strikeout'])
             
             if has_all_stats:
                 days_with_all_stats += 1
                 # Check if all stat types had both picks correct (1+)
                 all_correct = all(detail['results'][stat_type]['both_correct'] 
-                                for stat_type in ['hit', 'strikeout', 'walk'])
+                                for stat_type in ['hit', 'strikeout'])
                 if all_correct:
                     all_stats_both_correct_days += 1
                 
                 # Check if all stat types had both picks correct (2+)
                 all_correct_2_plus = all(detail['results'][stat_type]['both_correct_2_plus'] 
-                                       for stat_type in ['hit', 'strikeout', 'walk'])
+                                       for stat_type in ['hit', 'strikeout'])
                 if all_correct_2_plus:
                     all_stats_both_correct_2_plus_days += 1
         
-        for stat_type in ['hit', 'strikeout', 'walk']:
+        for stat_type in ['hit', 'strikeout']:
             results = self.daily_results[stat_type]
             
             if not results:
@@ -373,17 +403,54 @@ class Top2PredictionAnalyzer:
         
         # Print overall analysis
         print(f"\n{'='*100}")
-        print(f"OVERALL ANALYSIS - ALL STATS COMBINED")
+        print(f"OVERALL ANALYSIS - HITS AND STRIKEOUTS COMBINED")
         print(f"{'='*100}")
         
         if days_with_all_stats > 0:
             all_stats_percentage = all_stats_both_correct_days / days_with_all_stats * 100
             all_stats_percentage_2_plus = all_stats_both_correct_2_plus_days / days_with_all_stats * 100
-            print(f"Days with all 3 stat types analyzed: {days_with_all_stats}")
+            print(f"Days with both stat types analyzed: {days_with_all_stats}")
             print(f"Days with ALL top 2 picks correct (1+): {all_stats_both_correct_days} ({all_stats_percentage:.1f}%)")
             print(f"Days with ALL top 2 picks correct (2+): {all_stats_both_correct_2_plus_days} ({all_stats_percentage_2_plus:.1f}%)")
         else:
-            print("No days found with all 3 stat types analyzed")
+            print("No days found with both stat types analyzed")
+        
+        # Print Top 1 picks analysis
+        print(f"\n{'='*100}")
+        print(f"TOP 1 PICK ANALYSIS")
+        print(f"{'='*100}")
+        
+        for stat_type in ['hit', 'strikeout']:
+            top1_results = self.top1_results[stat_type]
+            
+            if not top1_results:
+                continue
+            
+            top1_correct_count = sum(top1_results)
+            top1_percentage = top1_correct_count / len(top1_results) * 100
+            
+            print(f"\n{stat_type.upper()} - Top 1 Pick Analysis:")
+            print(f"  Total days analyzed: {len(top1_results)}")
+            print(f"  Top 1 pick achieved stat: {top1_correct_count} ({top1_percentage:.1f}%)")
+        
+        # Combined Top 1 analysis
+        if self.top1_results['hit'] and self.top1_results['strikeout']:
+            combined_top1_correct = sum(self.top1_results['hit']) + sum(self.top1_results['strikeout'])
+            combined_top1_total = len(self.top1_results['hit']) + len(self.top1_results['strikeout'])
+            combined_top1_percentage = combined_top1_correct / combined_top1_total * 100
+            
+            print(f"\nCOMBINED Top 1 Picks (Hit + Strikeout):")
+            print(f"  Total top 1 picks analyzed: {combined_top1_total}")
+            print(f"  Top 1 picks achieved stat: {combined_top1_correct} ({combined_top1_percentage:.1f}%)")
+            
+            # BOTH Top 1 picks correct on same day
+            if self.top1_both_correct:
+                both_top1_correct_count = sum(self.top1_both_correct)
+                both_top1_percentage = both_top1_correct_count / len(self.top1_both_correct) * 100
+                
+                print(f"\nBOTH Top 1 Picks Correct Same Day:")
+                print(f"  Days analyzed: {len(self.top1_both_correct)}")
+                print(f"  Days with BOTH top 1 picks correct: {both_top1_correct_count} ({both_top1_percentage:.1f}%)")
         
         # Print triple achievements
         if self.triple_achievements:
@@ -404,7 +471,7 @@ class Top2PredictionAnalyzer:
         total_all_picks = 0
         
         for detail in self.daily_details:
-            for stat_type in ['hit', 'strikeout', 'walk']:
+            for stat_type in ['hit', 'strikeout']:
                 if stat_type in detail['results']:
                     picks = detail['results'][stat_type]['picks']
                     for pick in picks:
@@ -434,10 +501,10 @@ class Top2PredictionAnalyzer:
 
     def create_visualization(self, save_path: str = "top2_analysis.png"):
         """Create visualization of top 2 picks success rates."""
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(20, 6))
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
         
         # Chart 1: Both picks correct percentage by stat type (1+ vs 2+)
-        stat_types = ['hit', 'strikeout', 'walk']
+        stat_types = ['hit', 'strikeout']
         both_correct_rates_1_plus = []
         both_correct_rates_2_plus = []
         
@@ -525,7 +592,39 @@ class Top2PredictionAnalyzer:
                 ax2.text(bar.get_x() + bar.get_width()/2., height + 1,
                         f'{height:.1f}%', ha='center', va='bottom', fontsize=9)
         
-        # Chart 3: Perfect days comparison
+        # Chart 3: Top 1 Pick Success Rates (Individual + Both Combined)
+        categories = ['Hit Top 1', 'Strikeout Top 1', 'BOTH Top 1\nSame Day']
+        rates = []
+        
+        # Individual top 1 rates
+        for stat_type in stat_types:
+            top1_results = self.top1_results[stat_type]
+            if top1_results:
+                rate = sum(top1_results) / len(top1_results) * 100
+                rates.append(rate)
+            else:
+                rates.append(0)
+        
+        # Both top 1 correct on same day rate
+        if self.top1_both_correct:
+            both_rate = sum(self.top1_both_correct) / len(self.top1_both_correct) * 100
+            rates.append(both_rate)
+        else:
+            rates.append(0)
+        
+        colors = ['lightcoral', 'lightblue', 'gold']
+        bars5 = ax3.bar(categories, rates, color=colors)
+        ax3.set_ylabel('Success Rate (%)')
+        ax3.set_title('Top 1 Pick Success Rates')
+        ax3.set_ylim(0, 100)
+        
+        # Add percentage labels
+        for bar, rate in zip(bars5, rates):
+            height = bar.get_height()
+            ax3.text(bar.get_x() + bar.get_width()/2., height + 1,
+                    f'{rate:.1f}%', ha='center', va='bottom', fontsize=9)
+        
+        # Chart 4: Perfect days comparison
         categories = ['All Stats\n1+ Correct', 'All Stats\n2+ Correct']
         
         # Calculate rates
@@ -534,16 +633,16 @@ class Top2PredictionAnalyzer:
         days_with_all_stats = 0
         
         for detail in self.daily_details:
-            has_all_stats = all(stat_type in detail['results'] for stat_type in ['hit', 'strikeout', 'walk'])
+            has_all_stats = all(stat_type in detail['results'] for stat_type in ['hit', 'strikeout'])
             if has_all_stats:
                 days_with_all_stats += 1
                 all_correct_1_plus = all(detail['results'][stat_type]['both_correct'] 
-                                       for stat_type in ['hit', 'strikeout', 'walk'])
+                                       for stat_type in ['hit', 'strikeout'])
                 if all_correct_1_plus:
                     all_stats_both_correct_days_1_plus += 1
                 
                 all_correct_2_plus = all(detail['results'][stat_type]['both_correct_2_plus'] 
-                                       for stat_type in ['hit', 'strikeout', 'walk'])
+                                       for stat_type in ['hit', 'strikeout'])
                 if all_correct_2_plus:
                     all_stats_both_correct_days_2_plus += 1
         
@@ -557,15 +656,15 @@ class Top2PredictionAnalyzer:
             rates = [0, 0]
         
         colors = ['gold', 'darkorange']
-        bars5 = ax3.bar(categories, rates, color=colors)
-        ax3.set_ylabel('Perfect Day Rate (%)')
-        ax3.set_title('Perfect Days Comparison')
-        ax3.set_ylim(0, max(rates) * 1.2 if rates else 10)
+        bars6 = ax4.bar(categories, rates, color=colors)
+        ax4.set_ylabel('Perfect Day Rate (%)')
+        ax4.set_title('Perfect Days Comparison')
+        ax4.set_ylim(0, max(rates) * 1.2 if rates else 10)
         
         # Add percentage labels
-        for bar, rate in zip(bars5, rates):
+        for bar, rate in zip(bars6, rates):
             height = bar.get_height()
-            ax3.text(bar.get_x() + bar.get_width()/2., height + 1,
+            ax4.text(bar.get_x() + bar.get_width()/2., height + 1,
                     f'{rate:.1f}%', ha='center', va='bottom', fontsize=10)
         
         plt.tight_layout()
@@ -589,7 +688,7 @@ class Top2PredictionAnalyzer:
             print(f"\nDate: {detail['date']}")
             print(f"{'-'*60}")
             
-            for stat_type in ['hit', 'strikeout', 'walk']:
+            for stat_type in ['hit', 'strikeout']:
                 if stat_type not in detail['results']:
                     continue
                 
