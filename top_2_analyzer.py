@@ -30,6 +30,13 @@ class Top2PredictionAnalyzer:
         }
         self.top1_both_correct = []  # Track days when BOTH top 1 picks achieved their stats
         
+        # Track homerun analysis for top 2 hit picks
+        self.homerun_results = {
+            'top2_hit_picks_with_homeruns': [],  # Track days when 1 or both top 2 hit picks got homeruns
+            'both_hit_picks_homeruns': [],       # Track days when BOTH top 2 hit picks got homeruns
+            'individual_homerun_success': []     # Track individual homerun success for top 2 hit picks
+        }
+        
     def get_game_boxscore(self, game_id: str) -> dict:
         """Get boxscore data for a specific game."""
         try:
@@ -77,7 +84,7 @@ class Top2PredictionAnalyzer:
         
         result = {
             'found': False,
-            'stats': {'hits': 0, 'strikeouts': 0, 'walks': 0}
+            'stats': {'hits': 0, 'strikeouts': 0, 'walks': 0, 'homeruns': 0}
         }
         
         # Search both teams' batting stats
@@ -104,7 +111,8 @@ class Top2PredictionAnalyzer:
                         result['stats'] = {
                             'hits': batting_stats.get('hits', 0),
                             'strikeouts': batting_stats.get('strikeOuts', 0),
-                            'walks': batting_stats.get('baseOnBalls', 0)
+                            'walks': batting_stats.get('baseOnBalls', 0),
+                            'homeruns': batting_stats.get('homeRuns', 0)
                         }
                     
                     return result
@@ -291,6 +299,40 @@ class Top2PredictionAnalyzer:
             
             print(f"  {stat_type.upper()}: {correct_count}/2 correct (1+), {correct_2_plus_count}/2 correct (2+) ({'✓' if both_correct else '✗'})")
         
+        # Track homerun performance for top 2 hit picks
+        if 'hit' in daily_detail['results']:
+            hit_picks = daily_detail['results']['hit']['picks']
+            homerun_count = 0
+            individual_homerun_results = []
+            
+            for pick in hit_picks:
+                if 'actual_stats' in pick:
+                    homeruns = pick['actual_stats'].get('homeruns', 0)
+                    has_homerun = homeruns > 0
+                    individual_homerun_results.append(has_homerun)
+                    if has_homerun:
+                        homerun_count += 1
+                else:
+                    individual_homerun_results.append(False)
+            
+            # Track if 1 or both top 2 hit picks got homeruns
+            any_homerun = homerun_count > 0
+            both_homeruns = homerun_count == 2
+            
+            self.homerun_results['top2_hit_picks_with_homeruns'].append(any_homerun)
+            self.homerun_results['both_hit_picks_homeruns'].append(both_homeruns)
+            self.homerun_results['individual_homerun_success'].extend(individual_homerun_results)
+            
+            daily_detail['results']['hit']['homerun_analysis'] = {
+                'any_homerun': any_homerun,
+                'both_homeruns': both_homeruns,
+                'homerun_count': homerun_count,
+                'individual_results': individual_homerun_results
+            }
+            
+            homerun_symbol = "🏠" if any_homerun else ""
+            print(f"  HIT HOMERUNS: {homerun_count}/2 got homeruns {'(BOTH!)' if both_homeruns else ''} {homerun_symbol}")
+        
         self.daily_details.append(daily_detail)
         
         # Check if both top 1 picks achieved their stats for this day
@@ -463,6 +505,53 @@ class Top2PredictionAnalyzer:
             
             print(f"\nTotal triple+ achievements: {len(self.triple_achievements)}")
         
+        # Print homerun analysis for top 2 hit picks
+        if self.homerun_results['top2_hit_picks_with_homeruns']:
+            print(f"\n{'='*100}")
+            print(f"HOMERUN ANALYSIS - TOP 2 HIT PICKS")
+            print(f"{'='*100}")
+            
+            total_days = len(self.homerun_results['top2_hit_picks_with_homeruns'])
+            days_with_any_homerun = sum(self.homerun_results['top2_hit_picks_with_homeruns'])
+            days_with_both_homeruns = sum(self.homerun_results['both_hit_picks_homeruns'])
+            
+            any_homerun_percentage = days_with_any_homerun / total_days * 100
+            both_homeruns_percentage = days_with_both_homeruns / total_days * 100
+            
+            print(f"Total days with top 2 hit pick data: {total_days}")
+            print(f"Days with 1+ homerun from top 2 hit picks: {days_with_any_homerun} ({any_homerun_percentage:.1f}%)")
+            print(f"Days with BOTH top 2 hit picks getting homeruns: {days_with_both_homeruns} ({both_homeruns_percentage:.1f}%)")
+            
+            # Individual homerun success rate
+            if self.homerun_results['individual_homerun_success']:
+                individual_homeruns = sum(self.homerun_results['individual_homerun_success'])
+                total_individual_picks = len(self.homerun_results['individual_homerun_success'])
+                individual_homerun_rate = individual_homeruns / total_individual_picks * 100
+                
+                print(f"Individual top 2 hit pick homerun rate: {individual_homeruns}/{total_individual_picks} ({individual_homerun_rate:.1f}%)")
+            
+            # Find and display homerun achievements
+            homerun_achievements = []
+            for detail in self.daily_details:
+                if 'hit' in detail['results'] and 'homerun_analysis' in detail['results']['hit']:
+                    if detail['results']['hit']['homerun_analysis']['any_homerun']:
+                        hit_picks = detail['results']['hit']['picks']
+                        for pick in hit_picks:
+                            if 'actual_stats' in pick and pick['actual_stats'].get('homeruns', 0) > 0:
+                                homerun_achievements.append({
+                                    'player': pick['name'],
+                                    'team': pick['team'],
+                                    'homeruns': pick['actual_stats']['homeruns'],
+                                    'date': detail['date'],
+                                    'pick_number': pick['pick']
+                                })
+            
+            if homerun_achievements:
+                print(f"\nHomerun Achievements by Top 2 Hit Picks:")
+                for achievement in homerun_achievements:
+                    print(f"🏠 {achievement['player']} ({achievement['team']}) - {achievement['homeruns']} HR{'s' if achievement['homeruns'] > 1 else ''} on {achievement['date']} (Pick #{achievement['pick_number']})")
+                print(f"\nTotal homerun instances: {len(homerun_achievements)}")
+        
         # Calculate total individual pick success across all stats
         total_pick1_correct = 0
         total_pick2_correct = 0
@@ -501,7 +590,7 @@ class Top2PredictionAnalyzer:
 
     def create_visualization(self, save_path: str = "top2_analysis.png"):
         """Create visualization of top 2 picks success rates."""
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+        fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(16, 18))
         
         # Chart 1: Both picks correct percentage by stat type (1+ vs 2+)
         stat_types = ['hit', 'strikeout']
@@ -667,6 +756,85 @@ class Top2PredictionAnalyzer:
             ax4.text(bar.get_x() + bar.get_width()/2., height + 1,
                     f'{rate:.1f}%', ha='center', va='bottom', fontsize=10)
         
+        # Chart 5: Homerun Analysis for Top 2 Hit Picks
+        if self.homerun_results['top2_hit_picks_with_homeruns']:
+            total_days = len(self.homerun_results['top2_hit_picks_with_homeruns'])
+            days_with_any_homerun = sum(self.homerun_results['top2_hit_picks_with_homeruns'])
+            days_with_both_homeruns = sum(self.homerun_results['both_hit_picks_homeruns'])
+            
+            any_homerun_percentage = days_with_any_homerun / total_days * 100
+            both_homeruns_percentage = days_with_both_homeruns / total_days * 100
+            
+            categories = ['1+ Homerun\nDays', 'Both Hit\nHomeruns']
+            percentages = [any_homerun_percentage, both_homeruns_percentage]
+            colors = ['orange', 'red']
+            
+            bars7 = ax5.bar(categories, percentages, color=colors)
+            ax5.set_ylabel('Percentage of Days (%)')
+            ax5.set_title('Homerun Success - Top 2 Hit Picks')
+            ax5.set_ylim(0, max(percentages) * 1.2 if percentages else 10)
+            
+            # Add percentage labels
+            for bar, percentage in zip(bars7, percentages):
+                height = bar.get_height()
+                ax5.text(bar.get_x() + bar.get_width()/2., height + 1,
+                        f'{percentage:.1f}%', ha='center', va='bottom', fontsize=10)
+            
+            # Add count labels below
+            counts = [days_with_any_homerun, days_with_both_homeruns]
+            for bar, count in zip(bars7, counts):
+                ax5.text(bar.get_x() + bar.get_width()/2., -max(percentages) * 0.1,
+                        f'({count}/{total_days})', ha='center', va='top', fontsize=9)
+        else:
+            ax5.text(0.5, 0.5, 'No homerun data available', ha='center', va='center', 
+                    transform=ax5.transAxes, fontsize=12)
+            ax5.set_title('Homerun Success - Top 2 Hit Picks')
+        
+        # Chart 6: Individual Homerun Rate vs Hit Success Rate
+        if self.homerun_results['individual_homerun_success']:
+            # Calculate individual homerun rate
+            individual_homeruns = sum(self.homerun_results['individual_homerun_success'])
+            total_individual_picks = len(self.homerun_results['individual_homerun_success'])
+            individual_homerun_rate = individual_homeruns / total_individual_picks * 100
+            
+            # Calculate overall hit success rate for top 2 picks
+            hit_successes = 0
+            total_hit_picks = 0
+            for detail in self.daily_details:
+                if 'hit' in detail['results']:
+                    picks = detail['results']['hit']['picks']
+                    for pick in picks:
+                        total_hit_picks += 1
+                        if pick['correct']:
+                            hit_successes += 1
+            
+            overall_hit_rate = hit_successes / total_hit_picks * 100 if total_hit_picks > 0 else 0
+            
+            categories = ['Hit Success\nRate (1+)', 'Homerun\nRate']
+            rates = [overall_hit_rate, individual_homerun_rate]
+            colors = ['lightblue', 'gold']
+            
+            bars8 = ax6.bar(categories, rates, color=colors)
+            ax6.set_ylabel('Success Rate (%)')
+            ax6.set_title('Hit Success vs Homerun Rate (Top 2 Picks)')
+            ax6.set_ylim(0, max(rates) * 1.2 if rates else 10)
+            
+            # Add percentage labels
+            for bar, rate in zip(bars8, rates):
+                height = bar.get_height()
+                ax6.text(bar.get_x() + bar.get_width()/2., height + 1,
+                        f'{rate:.1f}%', ha='center', va='bottom', fontsize=10)
+            
+            # Add count labels below
+            counts = [f'{hit_successes}/{total_hit_picks}', f'{individual_homeruns}/{total_individual_picks}']
+            for bar, count in zip(bars8, counts):
+                ax6.text(bar.get_x() + bar.get_width()/2., -max(rates) * 0.1,
+                        count, ha='center', va='top', fontsize=9)
+        else:
+            ax6.text(0.5, 0.5, 'No homerun data available', ha='center', va='center', 
+                    transform=ax6.transAxes, fontsize=12)
+            ax6.set_title('Hit Success vs Homerun Rate (Top 2 Picks)')
+        
         plt.tight_layout()
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"\nVisualization saved as: {save_path}")
@@ -706,11 +874,22 @@ class Top2PredictionAnalyzer:
                     if 'actual_stats' in pick:
                         stats = pick['actual_stats']
                         stat_count = pick['stat_count']
-                        stats_str = f"(H:{stats['hits']} K:{stats['strikeouts']} BB:{stats['walks']}) - {stat_count} {stat_type}s"
+                        homerun_info = f" HR:{stats.get('homeruns', 0)}" if stat_type == 'hit' else ""
+                        homerun_emoji = " 🏠" if stat_type == 'hit' and stats.get('homeruns', 0) > 0 else ""
+                        stats_str = f"(H:{stats['hits']} K:{stats['strikeouts']} BB:{stats['walks']}{homerun_info}) - {stat_count} {stat_type}s{homerun_emoji}"
                     else:
                         stats_str = f"({pick.get('reason', 'Unknown error')})"
                     
                     print(f"  Pick {pick['pick']}: {status_symbol_1_plus}(1+) {status_symbol_2_plus}(2+) {pick['name']} ({pick['team']}) - {prob_display} {stats_str}")
+                
+                # Add homerun summary for hit picks
+                if stat_type == 'hit' and 'homerun_analysis' in result:
+                    hr_analysis = result['homerun_analysis']
+                    if hr_analysis['any_homerun']:
+                        homerun_summary = f"🏠 HOMERUN DAY: {hr_analysis['homerun_count']}/2 hit picks got homeruns"
+                        if hr_analysis['both_homeruns']:
+                            homerun_summary += " (BOTH!)"
+                        print(f"  {homerun_summary}")
     
     def run_analysis(self, directory: str = ".", pattern: str = "*.json"):
         """Run the complete top 2 picks analysis."""

@@ -14,7 +14,8 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 # Default player name - can be changed here or via command line argument
-DEFAULT_PLAYER_NAME = "James Wood"
+DEFAULT_PLAYER_NAME = "Joey Ortiz"
+
 
 
 def get_game_boxscore(game_id: str) -> dict:

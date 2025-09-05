@@ -112,9 +112,30 @@ def load_daily_player_stats(given_date: date = date.today()):
 
         # Process each play, look for pitch events, and track how many pitches the pitcher threw of each type and zone
         stat_tracking = {}
+        batters_faced_tracking = {}  # Track which batters each pitcher has faced to avoid double counting
+        
         for play in play_by_play["allPlays"]:
             batter_id = play.get("matchup", {}).get("batter", {}).get("id")
             pitcher_id = play.get("matchup", {}).get("pitcher", {}).get("id")
+
+            # Track total batters faced for each pitcher (one per play, not per pitch)
+            if pitcher_id and batter_id:
+                if pitcher_id not in batters_faced_tracking:
+                    batters_faced_tracking[pitcher_id] = set()
+                
+                # Only count this batter if we haven't seen this pitcher-batter combination in this play
+                play_key = f"{pitcher_id}_{batter_id}_{play.get('atBatIndex', 0)}"
+                if play_key not in batters_faced_tracking[pitcher_id]:
+                    batters_faced_tracking[pitcher_id].add(play_key)
+                    
+                    # Initialize pitcher stats if needed
+                    if pitcher_id not in stat_tracking:
+                        stat_tracking[pitcher_id] = {}
+                    if "pitching" not in stat_tracking[pitcher_id]:
+                        stat_tracking[pitcher_id]["pitching"] = {"total": 0, "total_batters_faced": 0}
+                    
+                    # Increment batters faced
+                    stat_tracking[pitcher_id]["pitching"]["total_batters_faced"] += 1
 
             play_events = play.get("playEvents", [])
             for event in play_events:
@@ -134,7 +155,7 @@ def load_daily_player_stats(given_date: date = date.today()):
                         if pitcher_id not in stat_tracking:
                             stat_tracking[pitcher_id] = {}
                         if "pitching" not in stat_tracking[pitcher_id]:
-                            stat_tracking[pitcher_id]["pitching"] = {"total": 0}
+                            stat_tracking[pitcher_id]["pitching"] = {"total": 0, "total_batters_faced": 0}
                         stat_tracking[pitcher_id]["pitching"]["total"] += 1
 
                         if pitcher_split_code not in stat_tracking[pitcher_id]["pitching"]:

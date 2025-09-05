@@ -174,10 +174,12 @@ def analyze_games_for_date(date, games):
             "away_team": "",
             "home_vs_away_pitcher": {
                 "pitcher_name": "",
+                "pitcher_id": 0,
                 "batters": []
             },
             "away_vs_home_pitcher": {
                 "pitcher_name": "",
+                "pitcher_id": 0,
                 "batters": []
             },
             "error": None
@@ -243,6 +245,7 @@ def analyze_games_for_date(date, games):
 
         # Home team vs Away pitcher
         game_data["home_vs_away_pitcher"]["pitcher_name"] = away_pitcher_name
+        game_data["home_vs_away_pitcher"]["pitcher_id"] = away_pitcher_id
         
         if len(away_pitcher_data.get("past_games", [])) > 0:
             if lineups is not None:
@@ -334,6 +337,7 @@ def analyze_games_for_date(date, games):
 
         # Away team vs Home pitcher
         game_data["away_vs_home_pitcher"]["pitcher_name"] = home_pitcher_name
+        game_data["away_vs_home_pitcher"]["pitcher_id"] = home_pitcher_id
         
         if len(home_pitcher_data.get("past_games", [])) > 0:
             if lineups is not None:
@@ -433,14 +437,14 @@ def analyze_games_for_date(date, games):
 
 yesterday = datetime.date.today() - datetime.timedelta(days=1)
 today = datetime.date.today()
-start = datetime.date(2025, 5, 1) 
-end = datetime.date(2025, 6, 30)
-for date in pd.date_range(start=yesterday, end=today):
+start = datetime.date(2025, 9, 1)
+end = datetime.date(2025, 9, 30)
+for date in pd.date_range(start=start, end=yesterday):
     # Skip July 15th (All-Star Game)
     if date.month == 7 and date.day == 15:
         continue
 
-    if date.month == datetime.date.today().month and date.day == datetime.date.today().day:
+    if True: # date.month == datetime.date.today().month and date.day == datetime.date.today().day:
         games = get_games_by_date(date)
         if len(games) > 0:
             print(f"Analyzing {len(games)} total games for {date.strftime('%Y-%m-%d')}...")
